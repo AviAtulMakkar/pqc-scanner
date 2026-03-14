@@ -1,0 +1,58 @@
+version: "3.9"
+
+services:
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:-pqcscanner}
+      POSTGRES_USER:     ${POSTGRES_USER:-pqcuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pqcpassword}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # SQL init file — runs once on first container creation
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pqcuser} -d ${POSTGRES_DB:-pqcscanner}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pqcuser}:${POSTGRES_PASSWORD:-pqcpassword}@db:5432/${POSTGRES_DB:-pqcscanner}
+      SECRET_KEY:   ${SECRET_KEY:-change-me-in-production-32chars}
+      SMTP_HOST:    ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT:    ${SMTP_PORT:-587}
+      SMTP_USER:    ${SMTP_USER:-}
+      SMTP_PASS:    ${SMTP_PASS:-}
+      FROM_EMAIL:   ${FROM_EMAIL:-noreply@pqcscanner.com}
+      FROM_NAME:    ${FROM_NAME:-PQC Scanner}
+      REPORTS_DIR:  /app/reports
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - reports:/app/reports
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:37000:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  reports:

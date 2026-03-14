@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>PQC Scanner — Quantum Readiness Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --white:#ffffff;--off:#f7f7f5;--off2:#f0f0ed;
+  --border:#e8e8e4;--border2:#d4d4cc;
+  --text:#1a1a18;--muted:#6b6b64;--dim:#9f9f96;
+  --safe:#166534;--safe-bg:#f0fdf4;--safe-b:#bbf7d0;
+  --pqc:#0c4a6e;--pqc-bg:#f0f9ff;--pqc-b:#bae6fd;
+  --warn:#854d0e;--warn-bg:#fefce8;--warn-b:#fde68a;
+  --danger:#991b1b;--danger-bg:#fff1f2;--danger-b:#fecdd3;
+  --mono:'DM Mono',monospace;--sans:'DM Sans',sans-serif;
+  --r:6px;--sh:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  --shm:0 4px 16px rgba(0,0,0,.08),0 2px 4px rgba(0,0,0,.04);
+}
+html{font-size:15px}
+body{font-family:var(--sans);background:var(--off);color:var(--text);line-height:1.5;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--off)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+/* ── Auth page ── */
+.auth-page{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--off);padding:20px}
+.auth-card{background:var(--white);border:1px solid var(--border);border-radius:12px;width:100%;max-width:400px;overflow:hidden;box-shadow:var(--shm)}
+.auth-top{background:var(--text);padding:32px;text-align:center}
+.auth-logo{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px}
+.auth-dot{width:10px;height:10px;border-radius:50%;background:#4ade80;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.auth-title{color:#fff;font-size:18px;font-weight:400;font-family:var(--mono)}
+.auth-sub{color:#6b7280;font-size:12px;margin-top:4px}
+.auth-body{padding:28px}
+.auth-tabs{display:flex;margin-bottom:24px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.auth-tab{flex:1;padding:8px;text-align:center;font-size:13px;font-weight:500;cursor:pointer;background:none;border:none;color:var(--muted);transition:all .15s}
+.auth-tab.active{background:var(--text);color:var(--white)}
+.form-group{margin-bottom:14px}
+.form-label{display:block;font-size:11px;color:var(--muted);font-weight:500;margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em}
+.form-input{width:100%;height:40px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r);font-family:var(--mono);font-size:13px;color:var(--text);background:var(--white);outline:none;transition:border .15s}
+.form-input:focus{border-color:var(--border2)}
+.auth-btn{width:100%;height:42px;background:var(--text);color:var(--white);border:none;border-radius:var(--r);font-size:13px;font-weight:500;cursor:pointer;transition:background .15s;margin-top:4px}
+.auth-btn:hover{background:#2d2d2b}
+.auth-btn:disabled{opacity:.4;cursor:not-allowed}
+.auth-error{font-size:12px;color:var(--danger);background:var(--danger-bg);border:1px solid var(--danger-b);border-radius:var(--r);padding:8px 12px;margin-bottom:14px}
+
+/* ── App shell ── */
+.app{display:flex;min-height:100vh}
+.sidebar{width:220px;background:var(--white);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:50}
+.sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.s-dot{width:8px;height:8px;border-radius:50%;background:#4ade80;animation:pulse 2s infinite}
+.s-brand{font-family:var(--mono);font-size:12px;font-weight:500}
+.sidebar-nav{flex:1;padding:12px 10px;display:flex;flex-direction:column;gap:2px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--r);font-size:13px;color:var(--muted);cursor:pointer;border:none;background:none;width:100%;text-align:left;transition:all .15s}
+.nav-item:hover{background:var(--off);color:var(--text)}
+.nav-item.active{background:var(--off2);color:var(--text);font-weight:500}
+.nav-item .icon{font-size:14px;width:18px;text-align:center}
+.nav-badge{margin-left:auto;min-width:18px;height:18px;border-radius:9px;background:var(--danger-bg);border:1px solid var(--danger-b);color:var(--danger);font-size:10px;font-family:var(--mono);display:flex;align-items:center;justify-content:center;padding:0 4px}
+.sidebar-footer{padding:14px 10px;border-top:1px solid var(--border)}
+.user-pill{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r);background:var(--off)}
+.user-avatar{width:28px;height:28px;border-radius:50%;background:var(--text);color:var(--white);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0}
+.user-info{flex:1;min-width:0}
+.user-name{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.user-email{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.logout-btn{padding:4px 8px;font-size:11px;color:var(--muted);background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer}
+.logout-btn:hover{color:var(--danger);border-color:var(--danger-b)}
+
+.main-content{margin-left:220px;flex:1;min-width:0;padding:28px 32px}
+
+/* ── Page header ── */
+.page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px}
+.page-title{font-size:20px;font-weight:500;letter-spacing:-.02em}
+.page-sub{font-size:13px;color:var(--muted);margin-top:2px}
+
+/* ── Cards ── */
+.card{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:20px}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.card-title{font-size:13px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-family:var(--mono)}
+
+/* ── Stat grid ── */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+.stat-card{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:16px 18px}
+.stat-val{font-family:var(--mono);font-size:26px;font-weight:500;line-height:1;margin-bottom:4px}
+.stat-label{font-size:11px;color:var(--muted)}
+.stat-val.safe{color:var(--safe)}.stat-val.pqc{color:var(--pqc)}.stat-val.warn{color:var(--warn)}.stat-val.danger{color:var(--danger)}
+
+/* ── Badge ── */
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:4px;font-family:var(--mono);font-size:10px;font-weight:500;border:1px solid;white-space:nowrap}
+.badge.safe{background:var(--safe-bg);border-color:var(--safe-b);color:var(--safe)}
+.badge.pqcr{background:var(--pqc-bg);border-color:var(--pqc-b);color:var(--pqc)}
+.badge.warn{background:var(--warn-bg);border-color:var(--warn-b);color:var(--warn)}
+.badge.danger{background:var(--danger-bg);border-color:var(--danger-b);color:var(--danger)}
+.badge.neutral{background:var(--off);border-color:var(--border);color:var(--muted)}
+
+/* ── Scan input ── */
+.scan-hero{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:28px;margin-bottom:24px}
+.scan-headline{font-size:16px;font-weight:500;margin-bottom:4px}
+.scan-sub{font-size:13px;color:var(--muted);margin-bottom:18px}
+.scan-row{display:flex;gap:8px}
+.scan-input{flex:1;height:42px;padding:0 14px;border:1px solid var(--border);border-radius:var(--r);font-family:var(--mono);font-size:13px;color:var(--text);background:var(--off);outline:none;transition:border .15s}
+.scan-input:focus{border-color:var(--border2);background:var(--white)}
+.scan-input::placeholder{color:var(--dim)}
+.scan-btn{height:42px;padding:0 20px;background:var(--text);color:var(--white);border:none;border-radius:var(--r);font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px;transition:all .15s;white-space:nowrap}
+.scan-btn:hover{background:#2d2d2b}
+.scan-btn:disabled{opacity:.4;cursor:not-allowed}
+.scan-opts{display:flex;gap:16px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.opt-lbl{font-size:12px;color:var(--muted)}
+.opt-sel{font-family:var(--mono);font-size:11px;border:1px solid var(--border);border-radius:4px;background:var(--white);padding:3px 7px;outline:none;color:var(--text)}
+
+/* ── Progress ── */
+.progress-card{border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:20px}
+.progress-head{padding:14px 18px;background:var(--off);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.progress-title{font-family:var(--mono);font-size:12px;display:flex;align-items:center;gap:8px}
+.spinner{width:13px;height:13px;border-radius:50%;border:2px solid var(--border2);border-top-color:var(--text);animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.progress-bar-wrap{height:2px;background:var(--border)}
+.progress-bar{height:100%;background:var(--text);transition:width .4s}
+.progress-log{padding:10px 18px;max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:3px}
+.log-line{display:flex;gap:10px;font-family:var(--mono);font-size:11px;color:var(--muted);padding:1px 0}
+.log-time{color:var(--dim);min-width:55px}
+.log-safe{color:var(--safe)}
+.log-warn{color:var(--danger)}
+
+/* ── Table ── */
+.tbl{border:1px solid var(--border);border-radius:10px;overflow:hidden;width:100%}
+.tbl-head{display:grid;padding:9px 16px;background:var(--off);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+.tbl-row{border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.tbl-row:last-child{border-bottom:none}
+.tbl-row:hover{background:var(--off)}
+.tbl-cell{display:grid;align-items:center;gap:12px;padding:13px 16px}
+.host-name{font-family:var(--mono);font-size:12px;font-weight:500}
+.host-ip{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:1px}
+
+/* ── Host detail ── */
+.host-detail{padding:0 16px 16px;border-top:1px solid var(--border);background:var(--off)}
+.port-cards{display:flex;flex-direction:column;gap:10px;padding-top:14px}
+.port-card{background:var(--white);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.port-head{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--border)}
+.port-num{font-family:var(--mono);font-size:12px;font-weight:500;min-width:38px}
+.port-svc{font-size:12px;color:var(--muted);flex:1}
+.port-body{padding:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.di{}.di.full{grid-column:span 3}.di.half{grid-column:span 2}
+.dk{font-family:var(--mono);font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px}
+.dv{font-family:var(--mono);font-size:11px;color:var(--text);word-break:break-all;line-height:1.4}
+.dv.safe{color:var(--safe)}.dv.danger{color:var(--danger)}.dv.warn{color:var(--warn)}
+.cipher-pills{display:flex;flex-wrap:wrap;gap:3px;margin-top:5px}
+.cp{font-family:var(--mono);font-size:9px;padding:2px 6px;border-radius:3px;border:1px solid}
+.cp.safe{background:var(--safe-bg);border-color:var(--safe-b);color:var(--safe)}
+.cp.danger{background:var(--danger-bg);border-color:var(--danger-b);color:var(--danger)}
+.cp.neutral{background:var(--off);border-color:var(--border);color:var(--muted)}
+.rec-list{display:flex;flex-direction:column;gap:3px;margin-top:5px}
+.rec{font-size:11px;color:var(--muted);padding:5px 10px;background:var(--warn-bg);border-left:2px solid var(--warn-b);border-radius:0 3px 3px 0}
+.rec.d{background:var(--danger-bg);border-left-color:var(--danger-b)}
+
+/* ── Risk gauge ── */
+.risk-wrap{display:flex;align-items:center;gap:16px}
+.gauge{position:relative;width:64px;height:64px;flex-shrink:0}
+.gauge svg{width:64px;height:64px;transform:rotate(-90deg)}
+.gauge-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:15px;font-weight:500}
+
+/* ── Charts ── */
+.chart-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:24px}
+.chart-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px}
+.chart-wrap{position:relative;height:220px}
+.chart-wrap.tall{height:280px}
+
+/* ── Reports forms ── */
+.rep-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px}
+.rep-card{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:22px}
+.rep-icon{font-size:20px;margin-bottom:12px}
+.rep-title{font-size:14px;font-weight:500;margin-bottom:4px}
+.rep-desc{font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.6}
+.rf{display:flex;flex-direction:column;gap:10px}
+.fl{font-size:11px;color:var(--muted);font-weight:500;margin-bottom:4px;display:block}
+.fi{width:100%;height:36px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r);font-family:var(--mono);font-size:12px;color:var(--text);background:var(--white);outline:none}
+.fi:focus{border-color:var(--border2)}
+.fs{width:100%;height:36px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r);font-family:var(--mono);font-size:12px;color:var(--text);background:var(--white);outline:none}
+.fr2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sbtn{width:100%;height:36px;background:var(--text);color:var(--white);border:none;border-radius:var(--r);font-size:12px;font-weight:500;cursor:pointer;margin-top:4px;transition:background .15s}
+.sbtn:hover{background:#2d2d2b}
+.sbtn:disabled{opacity:.4;cursor:not-allowed}
+.smtp-note{font-size:11px;color:var(--muted);background:var(--off);border:1px solid var(--border);border-radius:var(--r);padding:8px 10px;margin-bottom:16px;line-height:1.5}
+
+/* ── Jobs table ── */
+.jobs-head{display:grid;grid-template-columns:1fr 80px 90px 140px 70px;padding:9px 16px;background:var(--off);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+.job-row{display:grid;grid-template-columns:1fr 80px 90px 140px 70px;padding:12px 16px;border-bottom:1px solid var(--border);align-items:center}
+.job-row:last-child{border-bottom:none}
+.cancel-btn{padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:var(--white);font-size:11px;color:var(--danger);cursor:pointer}
+.cancel-btn:hover{background:var(--danger-bg);border-color:var(--danger-b)}
+
+/* ── Info cards (about) ── */
+.info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+.info-card{border:1px solid var(--border);border-radius:8px;padding:18px;background:var(--white)}
+.info-tag{font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px}
+.info-card h4{font-size:13px;font-weight:500;margin-bottom:6px}
+.info-card p{font-size:12px;color:var(--muted);line-height:1.6}
+
+/* ── Filter bar ── */
+.filter-bar{display:flex;gap:6px}
+.fbtn{padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:var(--white);font-size:12px;color:var(--muted);cursor:pointer;transition:all .15s}
+.fbtn:hover{border-color:var(--border2);color:var(--text)}
+.fbtn.active{background:var(--text);border-color:var(--text);color:var(--white)}
+
+/* ── Toast ── */
+.toast-wrap{position:fixed;bottom:20px;right:20px;z-index:1000;display:flex;flex-direction:column;gap:6px}
+.toast{padding:10px 14px;border-radius:8px;border:1px solid var(--border);background:var(--white);box-shadow:var(--shm);font-size:13px;display:flex;align-items:center;gap:8px;animation:toastIn .2s ease;max-width:300px}
+@keyframes toastIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.toast.ok{border-color:var(--safe-b);background:var(--safe-bg);color:var(--safe)}
+.toast.err{border-color:var(--danger-b);background:var(--danger-bg);color:var(--danger)}
+
+.empty{text-align:center;padding:56px 24px;color:var(--dim);font-size:13px}
+.empty-icon{font-size:28px;margin-bottom:10px}
+.mono{font-family:var(--mono)}
+
+@media(max-width:900px){
+  .sidebar{width:60px}.sidebar .s-brand,.sidebar .nav-item span:not(.icon),.sidebar-footer .user-info,.sidebar-footer .logout-btn{display:none}
+  .main-content{margin-left:60px;padding:16px}
+  .stat-grid{grid-template-columns:repeat(2,1fr)}
+  .chart-grid,.chart-grid-3,.rep-grid{grid-template-columns:1fr}
+  .info-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+// ── State ────────────────────────────────────────────────────
+const API = '/api';
+let state = {
+  token: localStorage.getItem('pqc_token'),
+  user:  JSON.parse(localStorage.getItem('pqc_user') || 'null'),
+  page:  'scan',
+  scans: [],
+  activeScan: null,
+  viewScanId: null,
+  reports: [],
+  jobs: [],
+  analytics: null,
+  toasts: [],
+  authTab: 'login',
+  scanFilter: 'all',
+};
+
+function setState(patch) {
+  Object.assign(state, patch);
+  render();
+}
+
+// ── API helpers ───────────────────────────────────────────────
+async function api(path, opts = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+  if (state.token) headers['Authorization'] = `Bearer ${state.token}`;
+  const r = await fetch(API + path, { ...opts, headers });
+  if (r.status === 401) { logout(); return null; }
+  return r;
+}
+
+// ── Auth ──────────────────────────────────────────────────────
+async function login(username, password) {
+  const r = await fetch(API + '/auth/login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password })
+  });
+  const d = await r.json();
+  if (!r.ok) return d.detail || 'Login failed';
+  localStorage.setItem('pqc_token', d.access_token);
+  localStorage.setItem('pqc_user', JSON.stringify({ id: d.user_id, username: d.username, email: d.email, is_admin: d.is_admin }));
+  setState({ token: d.access_token, user: { id: d.user_id, username: d.username, email: d.email, is_admin: d.is_admin }, page: 'scan' });
+  loadScans();
+  return null;
+}
+
+async function register(username, email, password, full_name) {
+  const r = await fetch(API + '/auth/register', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, email, password, full_name })
+  });
+  const d = await r.json();
+  if (!r.ok) return d.detail || 'Registration failed';
+  localStorage.setItem('pqc_token', d.access_token);
+  localStorage.setItem('pqc_user', JSON.stringify({ id: d.user_id, username: d.username, email: d.email, is_admin: d.is_admin }));
+  setState({ token: d.access_token, user: { id: d.user_id, username: d.username, email: d.email, is_admin: d.is_admin }, page: 'scan' });
+  loadScans();
+  return null;
+}
+
+function logout() {
+  localStorage.removeItem('pqc_token');
+  localStorage.removeItem('pqc_user');
+  setState({ token: null, user: null, page: 'scan', scans: [], activeScan: null });
+}
+
+// ── Data loaders ───────────────────────────────────────────────
+async function loadScans() {
+  const r = await api('/scans');
+  if (r && r.ok) { const d = await r.json(); setState({ scans: d }); }
+}
+
+async function loadReports() {
+  const r = await api('/reports');
+  if (r && r.ok) { const d = await r.json(); setState({ reports: d }); }
+}
+
+async function loadJobs() {
+  const r = await api('/jobs');
+  if (r && r.ok) { const d = await r.json(); setState({ jobs: d }); }
+}
+
+async function loadAnalytics() {
+  const r = await api('/analytics/overview');
+  if (r && r.ok) { const d = await r.json(); setState({ analytics: d }); setTimeout(renderCharts, 100); }
+}
+
+async function selectScan(id) {
+  const r = await api('/scan/' + id);
+  if (r && r.ok) {
+    const d = await r.json();
+    setState({ activeScan: d, viewScanId: id, page: 'results' });
+  }
+}
+
+// ── Scan ──────────────────────────────────────────────────────
+async function startScan(domain, ports) {
+  if (!domain.trim()) return;
+  const r = await api('/scan', { method: 'POST', body: JSON.stringify({ domain, ports, threads: 100, include_subdomains: true }) });
+  if (!r || !r.ok) { toast('Failed to start scan', 'err'); return; }
+  const d = await r.json();
+  const scanId = d.scan_id;
+  const initScan = { id: scanId, domain, status: 'running', progress: 0, events: [], results: [], summary: {} };
+  setState({ activeScan: initScan, viewScanId: scanId, page: 'results' });
+
+  // SSE
+  const es = new EventSource(`${API}/scan/${scanId}/stream?token=${encodeURIComponent(state.token)}`);
+  es.onmessage = (e) => {
+    const ev = JSON.parse(e.data);
+    const current = state.activeScan;
+    if (!current || current.id !== scanId) { es.close(); return; }
+    const events = [...(current.events || []), ev];
+    const update = { ...current, events, message: ev.message || current.message, progress: ev.progress ?? current.progress };
+    if (ev.type === 'done' || ev.type === 'complete') {
+      update.status = ev.status || 'complete';
+      es.close();
+      api('/scan/' + scanId).then(r => r && r.ok ? r.json() : null).then(full => {
+        if (full) { setState({ activeScan: full }); loadScans(); }
+      });
+    }
+    setState({ activeScan: update });
+  };
+  es.onerror = () => es.close();
+}
+
+// ── Reports ───────────────────────────────────────────────────
+async function submitOnDemand(scanId, format, emailTo, sendEmail, notes) {
+  const r = await api('/report/on-demand', { method: 'POST', body: JSON.stringify({
+    scan_id: scanId, format, email_to: emailTo ? emailTo.split(',').map(e=>e.trim()) : [],
+    send_email: sendEmail, notes
+  })});
+  if (r && r.ok) { toast('Report generating…', 'ok'); setTimeout(loadReports, 3000); }
+  else toast('Error generating report', 'err');
+}
+
+async function submitScheduled(form) {
+  const r = await api('/report/scheduled', { method: 'POST', body: JSON.stringify({
+    domain: form.domain, run_at: new Date(form.run_at).toISOString(),
+    format: form.format, label: form.label,
+    email_to: form.email_to ? form.email_to.split(',').map(e=>e.trim()) : [],
+    send_email: form.send_email, ports: 'top'
+  })});
+  if (r && r.ok) { toast('Report scheduled ✓', 'ok'); loadJobs(); }
+  else toast('Error scheduling report', 'err');
+}
+
+async function submitFrequency(form) {
+  const r = await api('/report/frequency', { method: 'POST', body: JSON.stringify({
+    domain: form.domain, interval_value: parseInt(form.interval_value),
+    interval_unit: form.interval_unit, format: form.format, label: form.label,
+    max_runs: form.max_runs ? parseInt(form.max_runs) : null,
+    email_to: form.email_to ? form.email_to.split(',').map(e=>e.trim()) : [],
+    send_email: form.send_email, ports: 'top'
+  })});
+  if (r && r.ok) { toast('Frequency monitoring active ✓', 'ok'); loadJobs(); }
+  else toast('Error activating monitoring', 'err');
+}
+
+async function cancelJob(id) {
+  const r = await api('/jobs/' + id, { method: 'DELETE' });
+  if (r && r.ok) { toast('Job cancelled', 'ok'); loadJobs(); }
+}
+
+// ── Toast ─────────────────────────────────────────────────────
+function toast(msg, type='ok') {
+  const id = Date.now();
+  state.toasts = [...state.toasts, { id, msg, type }];
+  render();
+  setTimeout(() => { state.toasts = state.toasts.filter(t => t.id !== id); render(); }, 3500);
+}
+
+// ── Helpers ───────────────────────────────────────────────────
+function fmt(d) { if (!d) return '—'; return new Date(d).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'}); }
+function elapsed(s) { if (!s) return ''; return s < 60 ? `${s}s` : `${Math.floor(s/60)}m ${Math.round(s%60)}s`; }
+function riskColor(n) { return n<=20?'var(--safe)':n<=60?'var(--warn)':'var(--danger)'; }
+function lcClass(lc) { return {safe:'safe','pqc-ready':'pqcr',warn:'warn',danger:'danger'}[lc]||'neutral'; }
+function userInitial(u) { return u ? u.username[0].toUpperCase() : '?'; }
+
+// ── Chart helpers ─────────────────────────────────────────────
+const chartInstances = {};
+function destroyChart(id) { if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; } }
+
+function renderCharts() {
+  const a = state.analytics;
+  if (!a || state.page !== 'analytics') return;
+
+  // 1. Risk trend line chart
+  if (a.trends && a.trends.length > 0) {
+    destroyChart('risk-trend');
+    const ctx = document.getElementById('chart-risk-trend');
+    if (ctx) {
+      chartInstances['risk-trend'] = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: a.trends.map(t => new Date(t.date).toLocaleDateString('en-IN',{month:'short',day:'numeric'})),
+          datasets: [{
+            label: 'Quantum Risk Score',
+            data: a.trends.map(t => t.risk_score),
+            borderColor: '#991b1b', backgroundColor: 'rgba(153,27,27,.06)',
+            borderWidth: 2, pointRadius: 4, pointBackgroundColor: '#991b1b',
+            fill: true, tension: 0.3
+          }, {
+            label: 'Fully Safe',
+            data: a.trends.map(t => t.fully_safe),
+            borderColor: '#166534', backgroundColor: 'transparent',
+            borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#166534',
+            tension: 0.3
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: true, labels: { font: { family: 'DM Mono', size: 11 }, boxWidth: 12 } } },
+          scales: { y: { beginAtZero: true, grid: { color: '#e8e8e4' }, ticks: { font: { family: 'DM Mono', size: 10 } } },
+                    x: { grid: { display: false }, ticks: { font: { family: 'DM Mono', size: 10 } } } } }
+      });
+    }
+  }
+
+  // 2. PQC status donut
+  const sm = a.latest_summary || {};
+  if (sm.tls_endpoints > 0) {
+    destroyChart('pqc-donut');
+    const ctx2 = document.getElementById('chart-pqc-donut');
+    if (ctx2) {
+      chartInstances['pqc-donut'] = new Chart(ctx2, {
+        type: 'doughnut',
+        data: {
+          labels: ['Fully Safe', 'PQC Ready', 'Not Ready', 'Not Safe'],
+          datasets: [{ data: [sm.fully_quantum_safe||0, sm.pqc_ready||0, sm.pqc_not_ready||0, sm.not_quantum_safe||0],
+            backgroundColor: ['#166534','#0c4a6e','#854d0e','#991b1b'],
+            borderWidth: 0, hoverOffset: 4 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '65%',
+          plugins: { legend: { position: 'right', labels: { font: { family: 'DM Mono', size: 11 }, boxWidth: 12, padding: 12 } } } }
+      });
+    }
+  }
+
+  // 3. Cipher breakdown bar chart
+  const ciphers = Object.entries(a.cipher_totals || {}).slice(0, 10);
+  if (ciphers.length > 0) {
+    destroyChart('cipher-bar');
+    const ctx3 = document.getElementById('chart-cipher-bar');
+    if (ctx3) {
+      chartInstances['cipher-bar'] = new Chart(ctx3, {
+        type: 'bar',
+        data: {
+          labels: ciphers.map(([k]) => k.length > 28 ? k.slice(0,28)+'…' : k),
+          datasets: [{ label: 'Occurrences', data: ciphers.map(([,v]) => v),
+            backgroundColor: ciphers.map(([k]) => k.includes('TLS_AES') || k.includes('CHACHA') ? '#166534' :
+              k.includes('ECDHE')||k.includes('DHE') ? '#991b1b' : '#854d0e'),
+            borderRadius: 3, borderSkipped: false }]
+        },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { x: { beginAtZero: true, grid: { color: '#e8e8e4' }, ticks: { font: { family: 'DM Mono', size: 10 } } },
+                    y: { grid: { display: false }, ticks: { font: { family: 'DM Mono', size: 9 } } } } }
+      });
+    }
+  }
+
+  // 4. TLS version breakdown
+  const tlsVersions = Object.entries(a.tls_totals || {});
+  if (tlsVersions.length > 0) {
+    destroyChart('tls-bar');
+    const ctx4 = document.getElementById('chart-tls-bar');
+    if (ctx4) {
+      const colors = { 'TLSv1.3': '#166534', 'TLSv1.2': '#854d0e', 'TLSv1.1': '#991b1b', 'TLSv1.0': '#991b1b', 'SSLv3': '#991b1b' };
+      chartInstances['tls-bar'] = new Chart(ctx4, {
+        type: 'bar',
+        data: {
+          labels: tlsVersions.map(([k]) => k),
+          datasets: [{ data: tlsVersions.map(([,v]) => v),
+            backgroundColor: tlsVersions.map(([k]) => colors[k] || '#9f9f96'),
+            borderRadius: 4, borderSkipped: false }]
+        },
+        options: { responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, grid: { color: '#e8e8e4' }, ticks: { font: { family: 'DM Mono', size: 10 } } },
+                    x: { grid: { display: false }, ticks: { font: { family: 'DM Mono', size: 11 } } } } }
+      });
+    }
+  }
+
+  // 5. Port heatmap (bar chart)
+  const ports = Object.entries(a.port_totals || {}).slice(0, 10);
+  if (ports.length > 0) {
+    destroyChart('port-heat');
+    const ctx5 = document.getElementById('chart-port-heat');
+    if (ctx5) {
+      chartInstances['port-heat'] = new Chart(ctx5, {
+        type: 'bar',
+        data: {
+          labels: ports.map(([k]) => ':' + k),
+          datasets: [{ label: 'Open across hosts', data: ports.map(([,v]) => v),
+            backgroundColor: '#1a1a18', borderRadius: 3, borderSkipped: false }]
+        },
+        options: { responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, grid: { color: '#e8e8e4' }, ticks: { font: { family: 'DM Mono', size: 10 } } },
+                    x: { grid: { display: false }, ticks: { font: { family: 'DM Mono', size: 11 } } } } }
+      });
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════════════════════════
+
+function render() {
+  const root = document.getElementById('root');
+  if (!state.token) { root.innerHTML = renderAuth(); bindAuth(); return; }
+  root.innerHTML = renderApp();
+  bindApp();
+  if (state.page === 'analytics') setTimeout(renderCharts, 50);
+}
+
+// ── Auth page ─────────────────────────────────────────────────
+function renderAuth() {
+  const isLogin = state.authTab === 'login';
+  return `
+  <div class="auth-page">
+    <div class="auth-card">
+      <div class="auth-top">
+        <div class="auth-logo"><div class="auth-dot"></div><span style="font-family:var(--mono);font-size:13px;color:#fff">PQC CBOM Scanner</span></div>
+        <div class="auth-sub">Quantum Readiness Assessment Platform</div>
+      </div>
+      <div class="auth-body">
+        <div class="auth-tabs">
+          <button class="auth-tab ${isLogin?'active':''}" onclick="setState({authTab:'login'})">Sign In</button>
+          <button class="auth-tab ${!isLogin?'active':''}" onclick="setState({authTab:'register'})">Register</button>
+        </div>
+        <div id="auth-error"></div>
+        ${isLogin ? `
+          <div class="form-group"><label class="form-label">Username</label><input class="form-input" id="a-user" placeholder="username" autocomplete="username"/></div>
+          <div class="form-group"><label class="form-label">Password</label><input class="form-input" id="a-pass" type="password" placeholder="••••••••" autocomplete="current-password"/></div>
+          <button class="auth-btn" id="a-submit">Sign In</button>
+        ` : `
+          <div class="form-group"><label class="form-label">Full Name</label><input class="form-input" id="a-name" placeholder="Your name"/></div>
+          <div class="form-group"><label class="form-label">Username</label><input class="form-input" id="a-user" placeholder="username"/></div>
+          <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="a-email" type="email" placeholder="you@example.com"/></div>
+          <div class="form-group"><label class="form-label">Password</label><input class="form-input" id="a-pass" type="password" placeholder="min 8 characters"/></div>
+          <button class="auth-btn" id="a-submit">Create Account</button>
+        `}
+      </div>
+    </div>
+  </div>`;
+}
+
+function bindAuth() {
+  const showErr = (msg) => { const el = document.getElementById('auth-error'); if (el) el.innerHTML = msg ? `<div class="auth-error">${msg}</div>` : ''; };
+  const btn = document.getElementById('a-submit');
+  if (!btn) return;
+  btn.onclick = async () => {
+    btn.disabled = true; showErr('');
+    const user = document.getElementById('a-user')?.value || '';
+    const pass = document.getElementById('a-pass')?.value || '';
+    let err;
+    if (state.authTab === 'login') {
+      err = await login(user, pass);
+    } else {
+      const name  = document.getElementById('a-name')?.value || '';
+      const email = document.getElementById('a-email')?.value || '';
+      err = await register(user, email, pass, name);
+    }
+    if (err) { showErr(err); btn.disabled = false; }
+  };
+  ['a-user','a-pass'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
+  });
+}
+
+// ── App shell ─────────────────────────────────────────────────
+function renderApp() {
+  const p = state.page;
+  const pages = [
+    ['scan',      '⚡', 'New Scan'],
+    ['results',   '◎', 'Results'],
+    ['analytics', '▦', 'Analytics'],
+    ['reports',   '⬇', 'Reports'],
+    ['jobs',      '⏱', 'Scheduled Jobs'],
+    ['about',     '?',  'About'],
+  ];
+  const u = state.user || {};
+  const completedScans = state.scans.filter(s => s.status === 'complete');
+
+  return `
+  <div class="app">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><div class="s-dot"></div><span class="s-brand">PQC Scanner</span></div>
+      <nav class="sidebar-nav">
+        ${pages.map(([id,icon,label]) => `
+          <button class="nav-item${p===id?' active':''}" onclick="navigate('${id}')">
+            <span class="icon">${icon}</span><span>${label}</span>
+            ${id==='results'&&state.scans.length>0?`<span class="nav-badge">${state.scans.length}</span>`:''}
+          </button>`).join('')}
+      </nav>
+      <div class="sidebar-footer">
+        <div class="user-pill">
+          <div class="user-avatar">${userInitial(u)}</div>
+          <div class="user-info">
+            <div class="user-name">${u.username||''}</div>
+            <div class="user-email">${u.email||''}</div>
+          </div>
+          <button class="logout-btn" onclick="logout()">Out</button>
+        </div>
+      </div>
+    </aside>
+    <main class="main-content">
+      ${p==='scan'      ? renderScanPage()              : ''}
+      ${p==='results'   ? renderResultsPage()           : ''}
+      ${p==='analytics' ? renderAnalyticsPage()         : ''}
+      ${p==='reports'   ? renderReportsPage(completedScans) : ''}
+      ${p==='jobs'      ? renderJobsPage()              : ''}
+      ${p==='about'     ? renderAboutPage()             : ''}
+    </main>
+  </div>
+  <div class="toast-wrap">
+    ${state.toasts.map(t => `<div class="toast ${t.type}">${t.type==='ok'?'✓':'✕'} ${t.msg}</div>`).join('')}
+  </div>`;
+}
+
+function navigate(page) {
+  setState({ page });
+  if (page === 'analytics' && !state.analytics) loadAnalytics();
+  if (page === 'reports') loadReports();
+  if (page === 'jobs') loadJobs();
+}
+
+// ── Scan page ─────────────────────────────────────────────────
+function renderScanPage() {
+  const scans = state.scans;
+  return `
+  <div class="page-header">
+    <div><div class="page-title">New Scan</div><div class="page-sub">Discover subdomains and assess quantum readiness across all endpoints</div></div>
+  </div>
+  <div class="scan-hero">
+    <div class="scan-headline">Scan a domain for PQC readiness</div>
+    <div class="scan-sub">Runs 9 discovery sources · TLS enumeration · PQC key exchange detection · CycloneDX CBOM export</div>
+    <div class="scan-row">
+      <input class="scan-input" id="scan-domain" placeholder="pnb.co.in" onkeydown="if(event.key==='Enter')doScan()"/>
+      <button class="scan-btn" onclick="doScan()">Scan Domain →</button>
+    </div>
+    <div class="scan-opts">
+      <div style="display:flex;align-items:center;gap:6px"><span class="opt-lbl">Port scope</span>
+        <select class="opt-sel" id="scan-ports"><option value="top">Top 20 ports</option><option value="web">Web only</option></select>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px"><span class="opt-lbl">Discovery sources</span>
+        <span class="mono" style="font-size:11px;color:var(--muted)">crt.sh · HackerTarget · AlienVault · RapidDNS · Shodan · SecurityTrails · VirusTotal · DNS Brute-force</span>
+      </div>
+    </div>
+  </div>
+  ${scans.length === 0 ? '' : `
+  <div class="page-header" style="margin-bottom:16px"><div class="page-title" style="font-size:15px">Scan History</div></div>
+  <div class="tbl">
+    <div class="tbl-head" style="grid-template-columns:1fr 80px 110px 120px 90px 70px">
+      <span>Domain</span><span>Status</span><span>Risk Score</span><span>Hosts</span><span>Started</span><span>Duration</span>
+    </div>
+    ${scans.map(s => {
+      const sm = s.summary || {};
+      const risk = sm.quantum_risk_score ?? '—';
+      const rcolor = typeof risk === 'number' ? riskColor(risk) : 'var(--muted)';
+      return `<div class="tbl-row" onclick="selectScan('${s.id}')">
+        <div class="tbl-cell" style="grid-template-columns:1fr 80px 110px 120px 90px 70px">
+          <div><div class="host-name">${s.domain}</div><div class="host-ip">${s.id.slice(0,8)}</div></div>
+          <span class="badge ${s.status==='complete'?'safe':s.status==='running'?'pqcr':'neutral'}">${s.status}</span>
+          <span style="font-family:var(--mono);font-size:14px;font-weight:500;color:${rcolor}">${risk}${typeof risk==='number'?'<span style="font-size:10px;color:var(--muted)">/100</span>':''}</span>
+          <span style="font-size:12px;color:var(--muted)">${sm.total_hosts||'—'} hosts</span>
+          <span style="font-size:11px;color:var(--muted);font-family:var(--mono)">${fmt(s.started_at)}</span>
+          <span style="font-size:11px;color:var(--muted);font-family:var(--mono)">${elapsed(s.elapsed)}</span>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`}`;
+}
+
+function doScan() {
+  const domain = document.getElementById('scan-domain')?.value || '';
+  const ports  = document.getElementById('scan-ports')?.value  || 'top';
+  startScan(domain, ports);
+}
+
+// ── Results page ──────────────────────────────────────────────
+function renderResultsPage() {
+  const scan = state.activeScan;
+  if (!scan) return `<div class="empty"><div class="empty-icon">◎</div>No scan selected. Start a scan from New Scan.</div>`;
+  if (scan.status === 'running') return renderProgress(scan) + renderLiveHosts(scan);
+  if (scan.status === 'error') return `<div class="empty" style="color:var(--danger)"><div class="empty-icon">✕</div>${scan.message||'Scan failed'}</div>`;
+  if (!scan.results || scan.results.length === 0) return `<div class="empty"><div class="empty-icon">◎</div>Scan complete — no responsive hosts found.</div>`;
+  return renderScanResults(scan);
+}
+
+function renderProgress(scan) {
+  const pct = scan.progress || 0;
+  const events = scan.events || [];
+  const rows = events.slice(-18).map(e => {
+    const cls = e.type==='complete'?'log-safe':e.type==='error'?'log-warn':'';
+    return `<div class="log-line"><span class="log-time">${e.ts?new Date(e.ts).toLocaleTimeString('en',{hour12:false}):'—'}</span><span class="${cls}">${e.message||''}</span></div>`;
+  }).join('');
+  return `
+  <div class="progress-card">
+    <div class="progress-head">
+      <div class="progress-title"><div class="spinner"></div>Scanning ${scan.domain}…</div>
+      <span style="font-family:var(--mono);font-size:12px;color:var(--muted)">${pct}%</span>
+    </div>
+    <div class="progress-bar-wrap"><div class="progress-bar" style="width:${pct}%"></div></div>
+    <div class="progress-log">${rows||'<div class="log-line"><span style="color:var(--dim)">Initialising…</span></div>'}</div>
+  </div>`;
+}
+
+function renderLiveHosts(scan) {
+  const hosts = (scan.results || []).slice(0, 20);
+  if (hosts.length === 0) return '';
+  return `<div style="margin-top:4px;font-size:12px;color:var(--muted);font-weight:500;margin-bottom:10px">${hosts.length} hosts discovered so far</div>
+  <div class="tbl">
+    <div class="tbl-head" style="grid-template-columns:1fr 80px 90px 100px">
+      <span>Hostname</span><span>IP</span><span>Ports</span><span>PQC Status</span>
+    </div>
+    ${hosts.map(h => {
+      const worst = getWorstPqc(h);
+      return `<div class="tbl-row"><div class="tbl-cell" style="grid-template-columns:1fr 80px 90px 100px">
+        <span class="host-name">${h.hostname}</span>
+        <span class="host-ip">${h.ip||'—'}</span>
+        <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">${h.ports.map(p=>':'+p.port).join(' ')}</span>
+        ${worst?`<span class="badge ${lcClass(worst.label_class)}">${worst.label}</span>`:`<span class="badge neutral">No TLS</span>`}
+      </div></div>`;
+    }).join('')}
+  </div>`;
+}
+
+function getWorstPqc(host) {
+  const order = { danger: 0, warn: 1, 'pqc-ready': 2, safe: 3 };
+  let worst = null;
+  for (const p of host.ports) {
+    if (!p.pqc) continue;
+    if (worst === null || order[p.pqc.label_class] < order[worst.label_class]) worst = p.pqc;
+  }
+  return worst;
+}
+
+function renderScanResults(scan) {
+  const sm = scan.summary || {};
+  const risk = sm.quantum_risk_score ?? 0;
+  const rLabel = risk <= 20 ? 'Low Risk' : risk <= 60 ? 'Medium Risk' : 'High Risk';
+  const filter = state.scanFilter || 'all';
+  const circ = 2 * Math.PI * 24;
+  const fill = circ - (risk / 100) * circ;
+
+  const filtered = filter === 'all' ? scan.results
+    : scan.results.filter(h => h.ports.some(p => p.pqc?.label_class === filter));
+
+  return `
+  <div class="page-header">
+    <div><div class="page-title">${scan.domain}</div><div class="page-sub">${scan.results.length} hosts · ${elapsed(scan.elapsed)} · ${fmt(scan.started_at)}</div></div>
+    <div style="display:flex;gap:8px">
+      <button class="scan-btn" style="background:var(--white);color:var(--text);border:1px solid var(--border);height:36px;padding:0 14px;font-size:12px" onclick="navigate('reports')">Generate Report</button>
+    </div>
+  </div>
+  <div class="stat-grid">
+    <div class="stat-card"><div class="stat-val">${sm.total_hosts||0}</div><div class="stat-label">Hosts Scanned</div></div>
+    <div class="stat-card"><div class="stat-val">${sm.tls_endpoints||0}</div><div class="stat-label">TLS Endpoints</div></div>
+    <div class="stat-card"><div class="stat-val safe">${sm.fully_quantum_safe||0}</div><div class="stat-label">Fully Quantum Safe</div></div>
+    <div class="stat-card"><div class="stat-val pqc">${sm.pqc_ready||0}</div><div class="stat-label">PQC Ready</div></div>
+    <div class="stat-card"><div class="stat-val warn">${sm.pqc_not_ready||0}</div><div class="stat-label">PQC Not Ready</div></div>
+    <div class="stat-card"><div class="stat-val danger">${sm.not_quantum_safe||0}</div><div class="stat-label">Not Quantum Safe</div></div>
+    <div class="stat-card"><div class="stat-val">${sm.labels_awarded||0}</div><div class="stat-label">Labels Awarded</div></div>
+    <div class="stat-card">
+      <div class="risk-wrap">
+        <div class="gauge">
+          <svg viewBox="0 0 56 56"><circle cx="28" cy="28" r="24" fill="none" stroke="var(--border)" stroke-width="5"/>
+            <circle cx="28" cy="28" r="24" fill="none" stroke="${riskColor(risk)}" stroke-width="5"
+              stroke-dasharray="${circ}" stroke-dashoffset="${fill}" stroke-linecap="round"/></svg>
+          <div class="gauge-num" style="color:${riskColor(risk)}">${risk}</div>
+        </div>
+        <div><div style="font-size:12px;font-weight:500;color:${riskColor(risk)}">${rLabel}</div>
+          <div style="font-size:11px;color:var(--muted)">Quantum Risk Score</div></div>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+    <div style="font-size:14px;font-weight:500">${filtered.length} hosts</div>
+    <div class="filter-bar">
+      ${[['all','All'],['danger','Not Safe'],['warn','Not Ready'],['pqc-ready','PQC Ready'],['safe','Fully Safe']].map(([f,l])=>
+        `<button class="fbtn${filter===f?' active':''}" onclick="setState({scanFilter:'${f}'})">${l}</button>`).join('')}
+    </div>
+  </div>
+  <div class="tbl">
+    <div class="tbl-head" style="grid-template-columns:1fr 110px 80px 150px 100px 24px">
+      <span>Hostname / IP</span><span>Open Ports</span><span>TLS</span><span>PQC Status</span><span>TLS Version</span><span></span>
+    </div>
+    ${filtered.map((h,i) => renderHostRow(h, i)).join('')}
+  </div>`;
+}
+
+function renderHostRow(h, i) {
+  const worst = getWorstPqc(h);
+  const lc = worst ? lcClass(worst.label_class) : 'neutral';
+  const openPorts = h.ports.map(p => ':'+p.port).join(' ');
+  const tlsPorts = h.ports.filter(p => p.has_tls);
+  const topTls = tlsPorts[0]?.tls?.version || '—';
+  const isOpen = state['hostOpen_'+i];
+
+  return `
+  <div class="tbl-row">
+    <div class="tbl-cell" style="grid-template-columns:1fr 110px 80px 150px 100px 24px" onclick="toggleHost(${i})">
+      <div><div class="host-name">${h.hostname}</div><div class="host-ip">${h.ip||'—'}</div></div>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">${openPorts}</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">${tlsPorts.length} TLS</span>
+      ${worst ? `<span class="badge ${lc}">${worst.label}</span>` : `<span class="badge neutral">No TLS</span>`}
+      <span style="font-family:var(--mono);font-size:11px">${topTls}</span>
+      <span style="color:var(--muted);font-size:12px">${isOpen?'▲':'▼'}</span>
+    </div>
+    ${isOpen ? `<div class="host-detail"><div class="port-cards">${h.ports.map(p => renderPortCard(p)).join('')}</div></div>` : ''}
+  </div>`;
+}
+
+function toggleHost(i) {
+  state['hostOpen_'+i] = !state['hostOpen_'+i];
+  render();
+}
+
+function renderPortCard(port) {
+  if (!port.has_tls) return `
+    <div class="port-card"><div class="port-head">
+      <span class="port-num">:${port.port}</span>
+      <span class="port-svc">${port.service_type||''}</span>
+      <span class="badge neutral">No TLS</span>
+    </div></div>`;
+
+  const tls  = port.tls  || {};
+  const cert = port.certificate || {};
+  const pqc  = port.pqc  || {};
+  const lc   = lcClass(pqc.label_class);
+  const kexCls  = tls.key_exchange_pqc ? 'safe' : 'danger';
+  const certCls = cert.sig_is_pqc       ? 'safe' : 'danger';
+  const isDanger = pqc.label_class === 'danger';
+
+  const cipherPills = (tls.all_ciphers||[]).map(c => {
+    const cls = (tls.pqc_ciphers||[]).includes(c)?'safe':(tls.vulnerable_ciphers||[]).includes(c)?'danger':'neutral';
+    return `<span class="cp ${cls}">${c}</span>`;
+  }).join('');
+
+  const recs = (pqc.recommendations||[]).map(r => `<div class="rec ${isDanger?'d':''}">${r}</div>`).join('');
+  const san  = (cert.san_domains||[]).slice(0,5).join(', ') + (cert.san_domains?.length>5?` +${cert.san_domains.length-5} more`:'');
+
+  return `
+  <div class="port-card">
+    <div class="port-head">
+      <span class="port-num">:${port.port}</span>
+      <span class="port-svc">${port.service_type||''}</span>
+      <span class="badge neutral" style="margin-right:4px">${tls.version||'—'}</span>
+      <span class="badge ${lc}">${pqc.label||'—'}</span>
+    </div>
+    <div class="port-body">
+      <div class="di"><div class="dk">Preferred Cipher</div><div class="dv">${tls.preferred_cipher||'—'}</div></div>
+      <div class="di"><div class="dk">Key Exchange</div><div class="dv ${kexCls}">${tls.key_exchange||'—'}</div></div>
+      <div class="di"><div class="dk">Detection</div><div class="dv">${tls.detection_method||'—'}</div></div>
+      <div class="di"><div class="dk">Cert Subject</div><div class="dv">${cert.subject||'—'}</div></div>
+      <div class="di"><div class="dk">Cert Issuer</div><div class="dv">${cert.issuer||'—'}</div></div>
+      <div class="di"><div class="dk">Expiry</div><div class="dv">${cert.expiry||'—'}</div></div>
+      <div class="di"><div class="dk">Signature Algo</div><div class="dv ${certCls}">${cert.sig_algorithm||'—'}</div></div>
+      <div class="di"><div class="dk">Public Key</div><div class="dv">${cert.key_type||''} ${cert.key_bits||''}‑bit</div></div>
+      <div class="di"><div class="dk">PQC Certificate</div><div class="dv ${cert.sig_is_pqc?'safe':'danger'}">${cert.sig_is_pqc?'Yes':'No'}</div></div>
+      ${san ? `<div class="di full"><div class="dk">SAN Domains</div><div class="dv">${san}</div></div>` : ''}
+      ${tls.all_ciphers?.length ? `<div class="di full"><div class="dk">All Ciphers (${tls.all_ciphers.length})</div><div class="cipher-pills">${cipherPills}</div></div>` : ''}
+      ${recs ? `<div class="di full"><div class="dk">Recommendations</div><div class="rec-list">${recs}</div></div>` : ''}
+    </div>
+  </div>`;
+}
+
+// ── Analytics page ────────────────────────────────────────────
+function renderAnalyticsPage() {
+  const a = state.analytics;
+  if (!a) return `<div class="empty"><div class="empty-icon">▦</div>Loading analytics…</div>`;
+  const sm = a.latest_summary || {};
+  const risk = sm.quantum_risk_score ?? 0;
+
+  return `
+  <div class="page-header">
+    <div><div class="page-title">Analytics</div><div class="page-sub">${a.total_scans} scans analysed · All domains</div></div>
+    <button class="scan-btn" style="background:var(--white);color:var(--text);border:1px solid var(--border);height:36px;padding:0 14px;font-size:12px" onclick="loadAnalytics()">↻ Refresh</button>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-card"><div class="stat-val">${a.total_scans}</div><div class="stat-label">Total Scans</div></div>
+    <div class="stat-card"><div class="stat-val safe">${sm.fully_quantum_safe||0}</div><div class="stat-label">Fully Safe (latest)</div></div>
+    <div class="stat-card"><div class="stat-val danger">${sm.not_quantum_safe||0}</div><div class="stat-label">Not Safe (latest)</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:${riskColor(risk)}">${risk}</div><div class="stat-label">Latest Risk Score</div></div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="card"><div class="card-header"><span class="card-title">Quantum Risk Score — Over Time</span></div><div class="chart-wrap"><canvas id="chart-risk-trend"></canvas></div></div>
+    <div class="card"><div class="card-header"><span class="card-title">PQC Status Distribution (latest scan)</span></div><div class="chart-wrap"><canvas id="chart-pqc-donut"></canvas></div></div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="card"><div class="card-header"><span class="card-title">TLS Version Breakdown</span></div><div class="chart-wrap"><canvas id="chart-tls-bar"></canvas></div></div>
+    <div class="card"><div class="card-header"><span class="card-title">Open Port Frequency (Heatmap)</span></div><div class="chart-wrap"><canvas id="chart-port-heat"></canvas></div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:24px"><div class="card-header"><span class="card-title">Top Cipher Suites (all scans)</span></div><div class="chart-wrap tall"><canvas id="chart-cipher-bar"></canvas></div></div>
+
+  <div class="page-header" style="margin-bottom:14px"><div class="page-title" style="font-size:15px">Scan Timeline</div></div>
+  <div class="tbl">
+    <div class="tbl-head" style="grid-template-columns:1fr 80px 90px 90px 80px">
+      <span>Domain</span><span>Risk</span><span>Hosts</span><span>Date</span><span>Action</span>
+    </div>
+    ${(a.scans||[]).slice().reverse().map(s => `
+      <div class="tbl-row"><div class="tbl-cell" style="grid-template-columns:1fr 80px 90px 90px 80px">
+        <span class="host-name">${s.domain}</span>
+        <span style="font-family:var(--mono);font-size:14px;font-weight:500;color:${riskColor(s.risk)}">${s.risk}</span>
+        <span style="font-size:12px;color:var(--muted)">${s.summary?.total_hosts??'—'} hosts</span>
+        <span style="font-size:11px;color:var(--muted);font-family:var(--mono)">${fmt(s.date)}</span>
+        <button class="scan-btn" style="height:28px;padding:0 10px;font-size:11px" onclick="selectScan('${s.id}')">View</button>
+      </div></div>`).join('')}
+  </div>`;
+}
+
+// ── Reports page ──────────────────────────────────────────────
+function renderReportsPage(completedScans) {
+  const reports = state.reports;
+  return `
+  <div class="page-header">
+    <div><div class="page-title">Reports</div><div class="page-sub">Generate, schedule, and deliver scan reports via email</div></div>
+  </div>
+  <div class="smtp-note">
+    📧 Email reports are sent from the server's configured SMTP address. Just enter recipient email(s) below — no SMTP credentials needed here.
+  </div>
+  <div class="rep-grid">
+    <div class="rep-card">
+      <div class="rep-icon">⚡</div>
+      <div class="rep-title">On-Demand Report</div>
+      <div class="rep-desc">Generate immediately from a completed scan. Download or email.</div>
+      <div class="rf">
+        <div><label class="fl">Scan</label>
+          <select class="fs" id="od-scan">
+            <option value="">— select scan —</option>
+            ${completedScans.map(s=>`<option value="${s.id}">${s.domain} · ${fmt(s.started_at)}</option>`).join('')}
+          </select>
+        </div>
+        <div><label class="fl">Format</label>
+          <select class="fs" id="od-fmt"><option value="html">HTML</option><option value="json">JSON</option><option value="cbom">CycloneDX CBOM</option></select>
+        </div>
+        <div><label class="fl">Email recipients (optional, comma separated)</label>
+          <input class="fi" id="od-email" placeholder="ciso@bank.com, security@bank.com"/>
+        </div>
+        <div><label class="fl">Notes (optional)</label><input class="fi" id="od-notes" placeholder="Q1 audit review"/></div>
+        <button class="sbtn" onclick="doOnDemand()">Generate Report</button>
+      </div>
+    </div>
+
+    <div class="rep-card">
+      <div class="rep-icon">🗓</div>
+      <div class="rep-title">Scheduled Report</div>
+      <div class="rep-desc">Trigger a fresh scan + report at a specific future time.</div>
+      <div class="rf">
+        <div><label class="fl">Domain</label><input class="fi" id="sc-domain" placeholder="pnb.co.in"/></div>
+        <div><label class="fl">Run at</label><input class="fi" id="sc-runat" type="datetime-local"/></div>
+        <div><label class="fl">Label</label><input class="fi" id="sc-label" placeholder="Monthly audit"/></div>
+        <div><label class="fl">Format</label>
+          <select class="fs" id="sc-fmt"><option value="html">HTML</option><option value="json">JSON</option><option value="cbom">CBOM</option></select>
+        </div>
+        <div><label class="fl">Email recipients (optional)</label><input class="fi" id="sc-email" placeholder="team@bank.com"/></div>
+        <button class="sbtn" onclick="doScheduled()">Schedule Report</button>
+      </div>
+    </div>
+
+    <div class="rep-card">
+      <div class="rep-icon">🔁</div>
+      <div class="rep-title">Frequency Report</div>
+      <div class="rep-desc">Automatically scan every N hours/days/weeks. Continuous monitoring.</div>
+      <div class="rf">
+        <div><label class="fl">Domain</label><input class="fi" id="fr-domain" placeholder="pnb.co.in"/></div>
+        <div class="fr2">
+          <div><label class="fl">Every</label><input class="fi" id="fr-val" type="number" min="1" value="7"/></div>
+          <div><label class="fl">Unit</label>
+            <select class="fs" id="fr-unit"><option value="hours">Hours</option><option value="days" selected>Days</option><option value="weeks">Weeks</option></select>
+          </div>
+        </div>
+        <div><label class="fl">Label</label><input class="fi" id="fr-label" placeholder="Weekly PNB monitoring"/></div>
+        <div><label class="fl">Max runs (blank = forever)</label><input class="fi" id="fr-max" type="number" min="1" placeholder="52"/></div>
+        <div><label class="fl">Email recipients (optional)</label><input class="fi" id="fr-email" placeholder="soc@bank.com"/></div>
+        <button class="sbtn" onclick="doFrequency()">Activate Monitoring</button>
+      </div>
+    </div>
+  </div>
+
+  ${reports.length === 0 ? '' : `
+  <div class="page-header" style="margin-bottom:14px"><div class="page-title" style="font-size:15px">Generated Reports</div></div>
+  <div class="tbl">
+    <div class="tbl-head" style="grid-template-columns:1fr 90px 80px 140px 80px 80px">
+      <span>Domain</span><span>Type</span><span>Format</span><span>Generated</span><span>Email</span><span>Download</span>
+    </div>
+    ${reports.map(r => `
+      <div class="tbl-row"><div class="tbl-cell" style="grid-template-columns:1fr 90px 80px 140px 80px 80px;cursor:default">
+        <div><div class="host-name">${r.domain||'—'}</div><div class="host-ip">${r.id.slice(0,8)}</div></div>
+        <span class="badge neutral">${r.report_type}</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase">${r.format}</span>
+        <span style="font-size:11px;color:var(--muted);font-family:var(--mono)">${fmt(r.created_at)}</span>
+        <span style="font-size:11px;color:${r.email_status==='sent'?'var(--safe)':'var(--muted)'}">${r.email_status||'—'}</span>
+        ${r.status==='ready'
+          ? `<a href="${API}/report/${r.id}/download?token=${encodeURIComponent(state.token||'')}" target="_blank" style="font-size:11px;color:var(--pqc);font-weight:500;text-decoration:none">Download ↗</a>`
+          : `<span style="font-size:11px;color:var(--dim)">${r.status}</span>`}
+      </div></div>`).join('')}
+  </div>`}`;
+}
+
+function doOnDemand() {
+  const scanId  = document.getElementById('od-scan')?.value;
+  const fmt     = document.getElementById('od-fmt')?.value || 'html';
+  const emailTo = document.getElementById('od-email')?.value || '';
+  const notes   = document.getElementById('od-notes')?.value || '';
+  if (!scanId) { toast('Select a scan first', 'err'); return; }
+  submitOnDemand(scanId, fmt, emailTo, !!emailTo, notes);
+}
+
+function doScheduled() {
+  submitScheduled({
+    domain:     document.getElementById('sc-domain')?.value || '',
+    run_at:     document.getElementById('sc-runat')?.value || '',
+    format:     document.getElementById('sc-fmt')?.value || 'html',
+    label:      document.getElementById('sc-label')?.value || '',
+    email_to:   document.getElementById('sc-email')?.value || '',
+    send_email: !!(document.getElementById('sc-email')?.value),
+  });
+}
+
+function doFrequency() {
+  submitFrequency({
+    domain:         document.getElementById('fr-domain')?.value || '',
+    interval_value: document.getElementById('fr-val')?.value || '7',
+    interval_unit:  document.getElementById('fr-unit')?.value || 'days',
+    label:          document.getElementById('fr-label')?.value || '',
+    max_runs:       document.getElementById('fr-max')?.value || '',
+    email_to:       document.getElementById('fr-email')?.value || '',
+    send_email:     !!(document.getElementById('fr-email')?.value),
+  });
+}
+
+// ── Jobs page ─────────────────────────────────────────────────
+function renderJobsPage() {
+  const jobs = state.jobs;
+  return `
+  <div class="page-header">
+    <div><div class="page-title">Scheduled Jobs</div><div class="page-sub">${jobs.filter(j=>j.status==='active').length} active jobs</div></div>
+    <button class="scan-btn" style="background:var(--white);color:var(--text);border:1px solid var(--border);height:36px;padding:0 14px;font-size:12px" onclick="loadJobs()">↻ Refresh</button>
+  </div>
+  ${jobs.length === 0
+    ? `<div class="empty"><div class="empty-icon">⏱</div>No jobs yet. Create one in Reports.</div>`
+    : `<div class="tbl">
+      <div class="jobs-head"><span>Job</span><span>Type</span><span>Status</span><span>Next Run</span><span>Action</span></div>
+      ${jobs.map(j => `
+        <div class="job-row">
+          <div><div style="font-size:13px;font-weight:500">${j.label||j.domain}</div>
+            <div style="font-size:11px;color:var(--muted);font-family:var(--mono)">${j.domain} · ${j.interval_value?j.interval_value+' '+j.interval_unit:fmt(j.next_run_at)}</div>
+          </div>
+          <span class="badge neutral">${j.job_type}</span>
+          <span class="badge ${j.status==='active'?'safe':j.status==='completed'?'neutral':'danger'}">${j.status}</span>
+          <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">${fmt(j.next_run_at)}</span>
+          ${j.status==='active'
+            ? `<button class="cancel-btn" onclick="cancelJob('${j.id}')">Cancel</button>`
+            : `<span style="font-size:11px;color:var(--dim)">—</span>`}
+        </div>`).join('')}
+    </div>`}`;
+}
+
+// ── About page ────────────────────────────────────────────────
+function renderAboutPage() {
+  return `
+  <div class="page-header"><div><div class="page-title">About</div><div class="page-sub">NIST FIPS 203/204/205 · CycloneDX 1.6 · CBOM</div></div></div>
+  <div class="info-grid">
+    ${[['NIST FIPS 203','ML-KEM (Kyber)','Post-quantum key encapsulation standard. Replaces ECDH/X25519 in TLS key exchange.'],
+       ['NIST FIPS 204','ML-DSA (Dilithium)','Post-quantum digital signature standard. Replaces RSA and ECDSA in X.509 certificates.'],
+       ['NIST FIPS 205','SLH-DSA (SPHINCS+)','Hash-based PQC signature scheme. Security based purely on hash functions.'],
+       ['HNDL Threat','Harvest Now, Decrypt Later','Adversaries record encrypted traffic today to decrypt when quantum computers exist. Banking data is highest priority.'],
+       ['CycloneDX 1.6 CBOM','Cryptographic Bill of Materials','Industry standard for inventorying cryptographic assets — enables compliance, risk tracking, migration planning.'],
+       ['Hybrid PQC','Transition Strategy','Deploy X25519 + ML-KEM-768 together. Protects against HNDL now while maintaining backward compatibility.'],
+    ].map(([tag,title,desc]) => `
+      <div class="info-card"><div class="info-tag">${tag}</div><h4>${title}</h4><p>${desc}</p></div>`).join('')}
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">PQC Readiness Labels</span></div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      ${[['safe','FULLY QUANTUM SAFE','TLS 1.3 + PQC key exchange (ML-KEM) + PQC certificate signature (ML-DSA/SLH-DSA). Fully NIST compliant.'],
+         ['pqcr','PQC READY','TLS 1.3 + PQC KEX, classical certificate. Protected against HNDL. Certificate migration recommended.'],
+         ['warn','PQC NOT READY','TLS 1.3 but classical key exchange. Vulnerable to harvest-now-decrypt-later.'],
+         ['danger','NOT QUANTUM SAFE','TLS 1.2 or below. Immediate upgrade required.'],
+      ].map(([lc,label,desc]) => `
+        <div style="display:flex;align-items:flex-start;gap:12px">
+          <span class="badge ${lc}" style="margin-top:1px;white-space:nowrap">${label}</span>
+          <span style="font-size:12px;color:var(--muted);line-height:1.6">${desc}</span>
+        </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function bindApp() {}
+
+// ── Download with auth token ───────────────────────────────────
+// Reports download link already includes token as query param
+// The backend /report/{id}/download endpoint needs to accept ?token=
+// (we patch main.py to accept it)
+
+// ── Init ──────────────────────────────────────────────────────
+if (state.token) { loadScans(); }
+render();
+</script>
+</body>
+</html>
