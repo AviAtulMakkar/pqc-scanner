@@ -11,7 +11,6 @@ from typing import Optional, List
 from sqlalchemy.orm import Session
 
 from .models import Report, Scan, ScanHost, ReportFormat
-from .database import SessionLocal
 from .email_service import EmailService
 
 REPORTS_DIR = os.getenv("REPORTS_DIR", "/app/reports")
@@ -20,13 +19,12 @@ os.makedirs(REPORTS_DIR, exist_ok=True)
 email_svc = EmailService()
 
 
-async def generate_on_demand(report_id: str, scan_id: str,
+async def generate_on_demand(db: Session, report_id: str, scan_id: str,
                               user_id: str, fmt: str, email_to: list,
                               send_email: bool, notes: Optional[str] = None):
-    """Generate a report from a completed scan. Opens its own DB session."""
-    db = SessionLocal()
+    """Generate a report from a completed scan."""
+    _update_report(db, report_id, status="generating")
     try:
-        _update_report(db, report_id, status="generating")
         scan_data = _load_scan_data(db, scan_id, user_id)
         if not scan_data:
             _update_report(db, report_id, status="error"); return
@@ -44,8 +42,6 @@ async def generate_on_demand(report_id: str, scan_id: str,
                            email_status="sent" if ok else f"failed: {msg}")
     except Exception as e:
         _update_report(db, report_id, status="error")
-    finally:
-        db.close()
 
 
 async def generate_for_job(db: Session, report_id: str, scan_data: dict,
@@ -153,14 +149,23 @@ def list_reports(db: Session, user_id: str, limit: int = 50) -> list:
     reports = db.query(Report).filter(
         Report.user_id == user_id
     ).order_by(Report.created_at.desc()).limit(limit).all()
-    return [{
-        "id":           r.id,
-        "scan_id":      r.scan_id,
-        "report_type":  r.report_type,
-        "format":       r.format.value if r.format else "html",
-        "status":       r.status,
-        "file_name":    r.file_name,
-        "email_status": r.email_status,
-        "emailed_to":   r.emailed_to or [],
-        "created_at":   r.created_at.isoformat() if r.created_at else None,
-    } for r in reports]
+    results = []
+    for r in reports:
+        # Join scan to get domain
+        domain = None
+        if r.scan_id:
+            scan = db.query(Scan).filter(Scan.id == r.scan_id).first()
+            domain = scan.domain if scan else None
+        results.append({
+            "id":           r.id,
+            "scan_id":      r.scan_id,
+            "domain":       domain,
+            "report_type":  r.report_type,
+            "format":       r.format.value if r.format else "html",
+            "status":       r.status,
+            "file_name":    r.file_name,
+            "email_status": r.email_status,
+            "emailed_to":   r.emailed_to or [],
+            "created_at":   r.created_at.isoformat() if r.created_at else None,
+        })
+    return results

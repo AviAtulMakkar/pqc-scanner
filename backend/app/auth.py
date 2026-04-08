@@ -1,13 +1,14 @@
 """
 Auth service — JWT token creation/verification, password hashing.
+Uses bcrypt directly to avoid passlib/bcrypt version incompatibility.
 """
 
 import os
+import bcrypt
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
@@ -19,15 +20,21 @@ SECRET_KEY = os.getenv("SECRET_KEY", "fallback-dev-key-change-in-production")
 ALGORITHM  = "HS256"
 TOKEN_EXPIRE_HOURS = 24
 
-pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
-bearer  = HTTPBearer()
+bearer = HTTPBearer()
 
 
 def hash_password(password: str) -> str:
-    return pwd_ctx.hash(password)
+    pwd_bytes = password.encode("utf-8")
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(pwd_bytes, salt).decode("utf-8")
+
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_ctx.verify(plain, hashed)
+    try:
+        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    except Exception:
+        return False
+
 
 def create_token(user_id: str, username: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(hours=TOKEN_EXPIRE_HOURS)
@@ -35,6 +42,7 @@ def create_token(user_id: str, username: str) -> str:
         {"sub": user_id, "username": username, "exp": expire},
         SECRET_KEY, algorithm=ALGORITHM
     )
+
 
 def decode_token(token: str) -> dict:
     try:

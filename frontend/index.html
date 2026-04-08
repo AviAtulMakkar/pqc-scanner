@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>PQC Scanner — Quantum Readiness Platform</title>
+<title>DoomScanner — Quantum Readiness Platform</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -331,27 +331,63 @@ async function startScan(domain, ports) {
   if (!r || !r.ok) { toast('Failed to start scan', 'err'); return; }
   const d = await r.json();
   const scanId = d.scan_id;
-  const initScan = { id: scanId, domain, status: 'running', progress: 0, events: [], results: [], summary: {} };
+  const initScan = { id: scanId, domain, status: 'running', progress: 0, eta_seconds: null, events: [], results: [], summary: {} };
   setState({ activeScan: initScan, viewScanId: scanId, page: 'results' });
 
-  // SSE
-  const es = new EventSource(`${API}/scan/${scanId}/stream?token=${encodeURIComponent(state.token)}`);
-  es.onmessage = (e) => {
-    const ev = JSON.parse(e.data);
-    const current = state.activeScan;
-    if (!current || current.id !== scanId) { es.close(); return; }
-    const events = [...(current.events || []), ev];
-    const update = { ...current, events, message: ev.message || current.message, progress: ev.progress ?? current.progress };
-    if (ev.type === 'done' || ev.type === 'complete') {
-      update.status = ev.status || 'complete';
-      es.close();
-      api('/scan/' + scanId).then(r => r && r.ok ? r.json() : null).then(full => {
-        if (full) { setState({ activeScan: full }); loadScans(); }
-      });
-    }
-    setState({ activeScan: update });
-  };
-  es.onerror = () => es.close();
+  let lastEventIdx = 0;
+  let sseWorking = false;
+
+  // Primary: poll /scan/{id} every 2s for full state including events
+  // This always works regardless of SSE
+  const pollTimer = setInterval(async () => {
+    try {
+      const fullR = await api('/scan/' + scanId);
+      if (!fullR || !fullR.ok) return;
+      const full = await fullR.json();
+
+      // Merge new events only
+      const current = state.activeScan;
+      if (!current || current.id !== scanId) { clearInterval(pollTimer); return; }
+
+      setState({ activeScan: {
+        ...full,
+        // keep any SSE events that arrived that arent in DB yet
+        events: full.events && full.events.length > 0 ? full.events : (current.events || []),
+      }});
+
+      if (full.status === 'complete' || full.status === 'error') {
+        clearInterval(pollTimer);
+        loadScans();
+      }
+    } catch(e) {}
+  }, 2000);
+
+  // SSE as bonus real-time layer on top
+  try {
+    const es = new EventSource(`${API}/scan/${scanId}/stream?token=${encodeURIComponent(state.token)}`);
+    es.onmessage = (e) => {
+      sseWorking = true;
+      let ev;
+      try { ev = JSON.parse(e.data); } catch { return; }
+      const current = state.activeScan;
+      if (!current || current.id !== scanId) { es.close(); return; }
+      const events = [...(current.events || []), ev];
+      const update = {
+        ...current, events,
+        message:     ev.message     || current.message,
+        progress:    ev.progress    ?? current.progress,
+        eta_seconds: ev.eta_seconds ?? current.eta_seconds,
+      };
+      if (ev.type === 'done' || ev.type === 'complete') {
+        update.status = 'complete'; update.progress = 100; update.eta_seconds = 0;
+        es.close();
+      } else if (ev.type === 'error') {
+        update.status = 'error'; es.close();
+      }
+      setState({ activeScan: update });
+    };
+    es.onerror = () => es.close();
+  } catch(e) {}
 }
 
 // ── Reports ───────────────────────────────────────────────────
@@ -553,7 +589,7 @@ function renderAuth() {
   <div class="auth-page">
     <div class="auth-card">
       <div class="auth-top">
-        <div class="auth-logo"><div class="auth-dot"></div><span style="font-family:var(--mono);font-size:13px;color:#fff">PQC CBOM Scanner</span></div>
+        <div class="auth-logo"><div class="auth-dot"></div><span style="font-family:var(--mono);font-size:13px;color:#fff">DoomScanner</span></div>
         <div class="auth-sub">Quantum Readiness Assessment Platform</div>
       </div>
       <div class="auth-body">
@@ -619,7 +655,7 @@ function renderApp() {
   return `
   <div class="app">
     <aside class="sidebar">
-      <div class="sidebar-logo"><div class="s-dot"></div><span class="s-brand">PQC Scanner</span></div>
+      <div class="sidebar-logo"><div class="s-dot"></div><span class="s-brand">DoomScanner</span></div>
       <nav class="sidebar-nav">
         ${pages.map(([id,icon,label]) => `
           <button class="nav-item${p===id?' active':''}" onclick="navigate('${id}')">
@@ -655,7 +691,7 @@ function renderApp() {
 function navigate(page) {
   setState({ page });
   if (page === 'analytics' && !state.analytics) loadAnalytics();
-  if (page === 'reports') loadReports();
+  if (page === 'reports') { loadReports(); loadScans(); }
   if (page === 'jobs') loadJobs();
 }
 
@@ -716,27 +752,122 @@ function doScan() {
 function renderResultsPage() {
   const scan = state.activeScan;
   if (!scan) return `<div class="empty"><div class="empty-icon">◎</div>No scan selected. Start a scan from New Scan.</div>`;
-  if (scan.status === 'running') return renderProgress(scan) + renderLiveHosts(scan);
+  // Show progress for queued or running
+  if (scan.status === 'queued' || scan.status === 'running') return renderProgress(scan) + renderLiveHosts(scan);
   if (scan.status === 'error') return `<div class="empty" style="color:var(--danger)"><div class="empty-icon">✕</div>${scan.message||'Scan failed'}</div>`;
-  if (!scan.results || scan.results.length === 0) return `<div class="empty"><div class="empty-icon">◎</div>Scan complete — no responsive hosts found.</div>`;
+  // Complete — show results even if results array not populated yet (summary exists)
+  if (!scan.results || scan.results.length === 0) {
+    if (scan.summary && scan.summary.total_hosts > 0) {
+      // Results in DB but not loaded — reload
+      if (scan.id) { api('/scan/' + scan.id).then(r => r && r.ok ? r.json() : null).then(full => { if (full && full.results && full.results.length > 0) setState({ activeScan: full }); }); }
+      return `<div class="empty"><div class="empty-icon"><div class="spinner" style="width:24px;height:24px;margin:0 auto"></div></div><div style="margin-top:12px">Loading results…</div></div>`;
+    }
+    return `<div class="empty"><div class="empty-icon">◎</div>Scan complete — no responsive hosts found.</div>`;
+  }
   return renderScanResults(scan);
 }
 
 function renderProgress(scan) {
   const pct = scan.progress || 0;
+  const eta = scan.eta_seconds;
+  const etaStr = eta > 0 ? (eta < 60 ? `${eta}s remaining` : `${Math.floor(eta/60)}m ${eta%60}s remaining`) : '';
   const events = scan.events || [];
-  const rows = events.slice(-18).map(e => {
-    const cls = e.type==='complete'?'log-safe':e.type==='error'?'log-warn':'';
-    return `<div class="log-line"><span class="log-time">${e.ts?new Date(e.ts).toLocaleTimeString('en',{hour12:false}):'—'}</span><span class="${cls}">${e.message||''}</span></div>`;
+
+  // Last host event for done/total
+  const lastHost = [...events].reverse().find(e => e.type==='host_result'||e.type==='host_skip');
+  const doneNum  = lastHost ? lastHost.done  : 0;
+  const totalNum = lastHost ? lastHost.total : 0;
+  const doneStr  = totalNum > 0 ? `${doneNum} / ${totalNum} hosts scanned` : '';
+
+  // Subdomain count from subdomains event
+  const subEv = events.find(e => e.type==='subdomains');
+  const subCount = subEv ? subEv.total_hosts : null;
+
+  // Dedup count
+  const dedups = events.filter(e => e.type === 'dedup');
+
+  // Phase label
+  const phases = ['Discovery','Deduplication','TLS Scanning','Complete'];
+  const phaseIdx = pct < 20 ? 0 : pct < 25 ? 1 : pct < 95 ? 2 : 3;
+
+  // Log — show all except dedup noise, last 25 lines
+  const logRows = events.filter(e => e.type !== 'dedup').slice(-25).map(e => {
+    const isHostDone = e.type === 'host_result';
+    const isSkip     = e.type === 'host_skip';
+    const isPhase    = e.type === 'phase';
+    const isComplete = e.type === 'complete';
+    const isError    = e.type === 'error';
+    const isSub      = e.type === 'subdomains';
+    let cls = '';
+    if (isHostDone || isComplete || isSub) cls = 'log-safe';
+    if (isError) cls = 'log-warn';
+    if (isSkip)  cls = '';
+    const icon = isHostDone ? '✓' : isSkip ? '–' : isPhase ? '▶' : isComplete ? '✓✓' : isSub ? '◎' : '·';
+    const ts = e.ts ? new Date(e.ts).toLocaleTimeString('en-IN',{hour12:false}) : '—';
+    return `<div class="log-line">
+      <span class="log-time">${ts}</span>
+      <span style="color:var(--dim);margin-right:6px;font-size:10px">${icon}</span>
+      <span class="${cls}">${e.message||''}</span>
+      ${isHostDone && e.host ? `<span style="margin-left:auto;font-size:10px;color:var(--dim)">${e.host.ip||''}</span>` : ''}
+    </div>`;
   }).join('');
+
+  // Mini stat bar
+  const hostsDone  = events.filter(e=>e.type==='host_result').length;
+  const hostsSkip  = events.filter(e=>e.type==='host_skip').length;
+  const hasTls     = events.filter(e=>e.type==='host_result' && e.host && e.host.ports && e.host.ports.some(p=>p.has_tls)).length;
+
   return `
-  <div class="progress-card">
-    <div class="progress-head">
-      <div class="progress-title"><div class="spinner"></div>Scanning ${scan.domain}…</div>
-      <span style="font-family:var(--mono);font-size:12px;color:var(--muted)">${pct}%</span>
+  <div class="page-header">
+    <div>
+      <div class="page-title" style="display:flex;align-items:center;gap:10px">
+        <div class="spinner"></div> Scanning ${scan.domain}
+      </div>
+      <div class="page-sub" style="margin-top:4px">${scan.message || 'Initialising…'}</div>
     </div>
-    <div class="progress-bar-wrap"><div class="progress-bar" style="width:${pct}%"></div></div>
-    <div class="progress-log">${rows||'<div class="log-line"><span style="color:var(--dim)">Initialising…</span></div>'}</div>
+  </div>
+
+  <!-- Phase steps -->
+  <div style="display:flex;gap:0;margin-bottom:16px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+    ${phases.map((ph,i) => `
+      <div style="flex:1;padding:10px 14px;text-align:center;font-size:11px;font-weight:${i===phaseIdx?'600':'400'};
+        color:${i<phaseIdx?'var(--safe)':i===phaseIdx?'var(--text)':'var(--dim)'};
+        background:${i===phaseIdx?'var(--off2)':'var(--white)'};
+        border-right:${i<3?'1px solid var(--border)':'none'}">
+        ${i<phaseIdx?'✓ ':''}${ph}
+      </div>`).join('')}
+  </div>
+
+  <!-- Progress bar -->
+  <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px 10px">
+      <div style="font-size:13px;font-weight:500">${doneStr || (subCount ? `${subCount} hosts queued` : 'Discovering subdomains…')}</div>
+      <div style="display:flex;align-items:center;gap:16px">
+        ${etaStr ? `<span style="font-family:var(--mono);font-size:11px;color:var(--muted)">⏱ ${etaStr}</span>` : ''}
+        <span style="font-family:var(--mono);font-size:20px;font-weight:600">${pct}<span style="font-size:12px;color:var(--muted)">%</span></span>
+      </div>
+    </div>
+    <div style="height:6px;background:var(--off)">
+      <div style="height:100%;background:var(--text);width:${pct}%;transition:width .8s ease;border-radius:0 3px 3px 0"></div>
+    </div>
+    ${totalNum>0 ? `
+    <div style="padding:10px 18px;display:flex;gap:20px;border-top:1px solid var(--border);background:var(--off)">
+      <span style="font-size:11px;color:var(--safe)">✓ ${hostsDone} scanned</span>
+      <span style="font-size:11px;color:var(--muted)">– ${hostsSkip} no response</span>
+      ${hasTls>0?`<span style="font-size:11px;color:var(--pqc)">◎ ${hasTls} TLS endpoints</span>`:''}
+      ${dedups.length>0?`<span style="font-size:11px;color:var(--warn)">⚡ ${dedups.length} duplicates skipped</span>`:''}
+    </div>` : ''}
+  </div>
+
+  <!-- Live log -->
+  <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+    <div style="padding:10px 18px;border-bottom:1px solid var(--border);background:var(--off);display:flex;align-items:center;justify-content:space-between">
+      <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">LIVE LOG</span>
+      <span style="font-size:11px;color:var(--dim)">${events.length} events</span>
+    </div>
+    <div class="progress-log" style="max-height:260px">
+      ${logRows || '<div class="log-line"><span style="color:var(--dim)">· Waiting for scanner…</span></div>'}
+    </div>
   </div>`;
 }
 
@@ -951,89 +1082,134 @@ function renderAnalyticsPage() {
 // ── Reports page ──────────────────────────────────────────────
 function renderReportsPage(completedScans) {
   const reports = state.reports;
+  // Build scan lookup for report domain names
+  const scanMap = {};
+  (state.scans||[]).forEach(s => { scanMap[s.id] = s; });
+
   return `
   <div class="page-header">
-    <div><div class="page-title">Reports</div><div class="page-sub">Generate, schedule, and deliver scan reports via email</div></div>
+    <div><div class="page-title">Reports</div>
+    <div class="page-sub">Generate, download, and email scan reports in 3 formats</div></div>
+    <button class="scan-btn" style="background:var(--white);color:var(--text);border:1px solid var(--border);height:36px;padding:0 14px;font-size:12px" onclick="loadReports();loadScans()">↻ Refresh</button>
   </div>
-  <div class="smtp-note">
-    📧 Email reports are sent from the server's configured SMTP address. Just enter recipient email(s) below — no SMTP credentials needed here.
-  </div>
-  <div class="rep-grid">
-    <div class="rep-card">
-      <div class="rep-icon">⚡</div>
-      <div class="rep-title">On-Demand Report</div>
-      <div class="rep-desc">Generate immediately from a completed scan. Download or email.</div>
-      <div class="rf">
-        <div><label class="fl">Scan</label>
-          <select class="fs" id="od-scan">
-            <option value="">— select scan —</option>
-            ${completedScans.map(s=>`<option value="${s.id}">${s.domain} · ${fmt(s.started_at)}</option>`).join('')}
-          </select>
-        </div>
-        <div><label class="fl">Format</label>
-          <select class="fs" id="od-fmt"><option value="html">HTML</option><option value="json">JSON</option><option value="cbom">CycloneDX CBOM</option></select>
-        </div>
-        <div><label class="fl">Email recipients (optional, comma separated)</label>
-          <input class="fi" id="od-email" placeholder="ciso@bank.com, security@bank.com"/>
-        </div>
-        <div><label class="fl">Notes (optional)</label><input class="fi" id="od-notes" placeholder="Q1 audit review"/></div>
-        <button class="sbtn" onclick="doOnDemand()">Generate Report</button>
-      </div>
-    </div>
 
-    <div class="rep-card">
-      <div class="rep-icon">🗓</div>
-      <div class="rep-title">Scheduled Report</div>
-      <div class="rep-desc">Trigger a fresh scan + report at a specific future time.</div>
+  <div class="smtp-note">
+    📧 Email delivery is pre-configured on the server. Just enter recipient email(s) — no SMTP setup needed here.
+  </div>
+
+  <!-- On-Demand: full width card -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><span class="card-title">⚡ On-Demand Report</span>
+      <span style="font-size:12px;color:var(--muted)">Generate immediately from any completed scan</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:end">
+      <div>
+        <label class="fl">Select Scan</label>
+        <select class="fs" id="od-scan" style="width:100%">
+          <option value="">— ${completedScans.length} completed scan${completedScans.length!==1?'s':''} —</option>
+          ${completedScans.length===0
+            ? '<option disabled>No completed scans yet</option>'
+            : completedScans.map(s=>`<option value="${s.id}">${s.domain} · ${fmt(s.started_at)} · risk ${(s.summary||{}).quantum_risk_score??'?'}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label class="fl">Format</label>
+        <select class="fs" id="od-fmt" style="width:100%">
+          <option value="html">HTML Report (readable)</option>
+          <option value="json">JSON (raw data)</option>
+          <option value="cbom">CycloneDX CBOM (compliance)</option>
+        </select>
+      </div>
+      <div>
+        <label class="fl">Email recipients (optional)</label>
+        <input class="fi" id="od-email" placeholder="ciso@bank.com, soc@bank.com" style="width:100%"/>
+      </div>
+      <div>
+        <label class="fl">Notes (optional)</label>
+        <input class="fi" id="od-notes" placeholder="Q1 audit review" style="width:100%"/>
+      </div>
+      <div></div>
+      <button class="sbtn" onclick="doOnDemand()" style="height:36px">Generate &amp; Download →</button>
+    </div>
+  </div>
+
+  <!-- Scheduled + Frequency side by side -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px">
+    <div class="card">
+      <div class="card-header"><span class="card-title">🗓 Scheduled Report</span></div>
       <div class="rf">
         <div><label class="fl">Domain</label><input class="fi" id="sc-domain" placeholder="pnb.co.in"/></div>
-        <div><label class="fl">Run at</label><input class="fi" id="sc-runat" type="datetime-local"/></div>
-        <div><label class="fl">Label</label><input class="fi" id="sc-label" placeholder="Monthly audit"/></div>
-        <div><label class="fl">Format</label>
-          <select class="fs" id="sc-fmt"><option value="html">HTML</option><option value="json">JSON</option><option value="cbom">CBOM</option></select>
+        <div><label class="fl">Run at (date &amp; time)</label><input class="fi" id="sc-runat" type="datetime-local"/></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div><label class="fl">Format</label>
+            <select class="fs" id="sc-fmt"><option value="html">HTML</option><option value="json">JSON</option><option value="cbom">CBOM</option></select>
+          </div>
+          <div><label class="fl">Label</label><input class="fi" id="sc-label" placeholder="Monthly audit"/></div>
         </div>
         <div><label class="fl">Email recipients (optional)</label><input class="fi" id="sc-email" placeholder="team@bank.com"/></div>
-        <button class="sbtn" onclick="doScheduled()">Schedule Report</button>
+        <button class="sbtn" onclick="doScheduled()">Schedule →</button>
       </div>
     </div>
 
-    <div class="rep-card">
-      <div class="rep-icon">🔁</div>
-      <div class="rep-title">Frequency Report</div>
-      <div class="rep-desc">Automatically scan every N hours/days/weeks. Continuous monitoring.</div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">🔁 Recurring Monitor</span></div>
       <div class="rf">
         <div><label class="fl">Domain</label><input class="fi" id="fr-domain" placeholder="pnb.co.in"/></div>
-        <div class="fr2">
+        <div style="display:grid;grid-template-columns:80px 1fr 1fr;gap:8px">
           <div><label class="fl">Every</label><input class="fi" id="fr-val" type="number" min="1" value="7"/></div>
           <div><label class="fl">Unit</label>
             <select class="fs" id="fr-unit"><option value="hours">Hours</option><option value="days" selected>Days</option><option value="weeks">Weeks</option></select>
           </div>
+          <div><label class="fl">Max runs</label><input class="fi" id="fr-max" type="number" min="1" placeholder="∞"/></div>
         </div>
         <div><label class="fl">Label</label><input class="fi" id="fr-label" placeholder="Weekly PNB monitoring"/></div>
-        <div><label class="fl">Max runs (blank = forever)</label><input class="fi" id="fr-max" type="number" min="1" placeholder="52"/></div>
         <div><label class="fl">Email recipients (optional)</label><input class="fi" id="fr-email" placeholder="soc@bank.com"/></div>
-        <button class="sbtn" onclick="doFrequency()">Activate Monitoring</button>
+        <button class="sbtn" onclick="doFrequency()">Activate →</button>
       </div>
     </div>
   </div>
 
-  ${reports.length === 0 ? '' : `
-  <div class="page-header" style="margin-bottom:14px"><div class="page-title" style="font-size:15px">Generated Reports</div></div>
-  <div class="tbl">
-    <div class="tbl-head" style="grid-template-columns:1fr 90px 80px 140px 80px 80px">
-      <span>Domain</span><span>Type</span><span>Format</span><span>Generated</span><span>Email</span><span>Download</span>
+  <!-- Generated reports table with 3-format download buttons -->
+  <div class="page-header" style="margin-bottom:14px">
+    <div class="page-title" style="font-size:15px">Generated Reports</div>
+  </div>
+  ${reports.length === 0
+    ? '<div class="empty"><div class="empty-icon">⬇</div>No reports yet. Generate one above.</div>'
+    : `<div class="tbl">
+    <div class="tbl-head" style="grid-template-columns:1fr 80px 100px 130px 220px">
+      <span>Scan / Domain</span><span>Type</span><span>Status</span><span>Generated</span><span>Download</span>
     </div>
-    ${reports.map(r => `
-      <div class="tbl-row"><div class="tbl-cell" style="grid-template-columns:1fr 90px 80px 140px 80px 80px;cursor:default">
-        <div><div class="host-name">${r.domain||'—'}</div><div class="host-ip">${r.id.slice(0,8)}</div></div>
-        <span class="badge neutral">${r.report_type}</span>
-        <span style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase">${r.format}</span>
+    ${reports.map(r => {
+      const scan = scanMap[r.scan_id] || {};
+      const domain = scan.domain || r.scan_id || '—';
+      const risk = (scan.summary||{}).quantum_risk_score;
+      const dlBase = `${API}/report/${r.id}/download?token=${encodeURIComponent(state.token||'')}`;
+      // Show 3 download buttons — each triggers a separate report generation for that format
+      const dlBtns = r.status === 'ready'
+        ? `<div style="display:flex;gap:6px;flex-wrap:wrap">
+            <a href="${dlBase}" target="_blank"
+               style="padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:var(--white);font-size:11px;font-family:var(--mono);color:var(--text);text-decoration:none;font-weight:500">
+               ${(r.format||'html').toUpperCase()} ↗
+            </a>
+            <button onclick="generateFormat('${r.scan_id}','html')"
+               style="padding:3px 8px;border-radius:4px;border:1px solid var(--border);background:var(--white);font-size:10px;color:var(--muted);cursor:pointer">HTML</button>
+            <button onclick="generateFormat('${r.scan_id}','json')"
+               style="padding:3px 8px;border-radius:4px;border:1px solid var(--border);background:var(--white);font-size:10px;color:var(--muted);cursor:pointer">JSON</button>
+            <button onclick="generateFormat('${r.scan_id}','cbom')"
+               style="padding:3px 8px;border-radius:4px;border:1px solid var(--border);background:var(--white);font-size:10px;color:var(--muted);cursor:pointer">CBOM</button>
+           </div>`
+        : `<span style="font-size:11px;color:var(--dim);font-family:var(--mono)">${r.status}…</span>`;
+      return `<div class="tbl-row"><div class="tbl-cell" style="grid-template-columns:1fr 80px 100px 130px 220px;cursor:default">
+        <div>
+          <div class="host-name">${domain}</div>
+          <div class="host-ip">${r.id.slice(0,8)} ${r.emailed_to&&r.emailed_to.length?'· 📧 '+r.emailed_to.join(', '):''}</div>
+        </div>
+        <span class="badge neutral" style="font-size:9px">${r.report_type}</span>
+        <span class="badge ${r.status==='ready'?'safe':'neutral'}">${r.status}</span>
         <span style="font-size:11px;color:var(--muted);font-family:var(--mono)">${fmt(r.created_at)}</span>
-        <span style="font-size:11px;color:${r.email_status==='sent'?'var(--safe)':'var(--muted)'}">${r.email_status||'—'}</span>
-        ${r.status==='ready'
-          ? `<a href="${API}/report/${r.id}/download?token=${encodeURIComponent(state.token||'')}" target="_blank" style="font-size:11px;color:var(--pqc);font-weight:500;text-decoration:none">Download ↗</a>`
-          : `<span style="font-size:11px;color:var(--dim)">${r.status}</span>`}
-      </div></div>`).join('')}
+        ${dlBtns}
+      </div></div>`;
+    }).join('')}
   </div>`}`;
 }
 
@@ -1067,6 +1243,35 @@ function doFrequency() {
     email_to:       document.getElementById('fr-email')?.value || '',
     send_email:     !!(document.getElementById('fr-email')?.value),
   });
+}
+
+async function generateFormat(scanId, format) {
+  if (!scanId) { toast('No scan ID', 'err'); return; }
+  const r = await api('/report/on-demand', { method: 'POST', body: JSON.stringify({
+    scan_id: scanId, format, email_to: [], send_email: false
+  })});
+  if (!r || !r.ok) { toast('Error generating ' + format.toUpperCase(), 'err'); return; }
+  const d = await r.json();
+  toast(format.toUpperCase() + ' report generating…', 'ok');
+  // Poll until ready then auto-download
+  let tries = 0;
+  const poll = setInterval(async () => {
+    tries++;
+    const reps = await api('/reports');
+    if (!reps || !reps.ok) return;
+    const list = await reps.json();
+    const rep = list.find(x => x.id === d.report_id || (x.scan_id === scanId && x.format === format && x.status === 'ready'));
+    if (rep && rep.status === 'ready') {
+      clearInterval(poll);
+      setState({ reports: list });
+      // Auto-open download
+      const a = document.createElement('a');
+      a.href = `${API}/report/${rep.id}/download?token=${encodeURIComponent(state.token||'')}`;
+      a.target = '_blank'; a.click();
+      toast(format.toUpperCase() + ' ready — downloading ↗', 'ok');
+    }
+    if (tries > 30) clearInterval(poll);
+  }, 2000);
 }
 
 // ── Jobs page ─────────────────────────────────────────────────

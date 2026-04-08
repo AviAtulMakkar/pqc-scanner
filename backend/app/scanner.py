@@ -1359,7 +1359,7 @@ def export_cyclonedx_cbom(domain, hosts, scan_time, elapsed):
         "metadata": {
             "timestamp": scan_time,
             "tools": [{
-                "vendor":  "PQC CBOM Scanner",
+                "vendor":  "DoomScanner",
                 "name":    "PQC Discovery Module",
                 "version": "2.0",
             }],
@@ -1706,7 +1706,7 @@ def build_html_report(domain, hosts, elapsed, scan_time):
 </head>
 <body>
 <div class="topbar">
-    <div class="topbar-title"><div class="dot"></div>PQC CBOM Scanner &mdash; Cryptographic Bill of Materials</div>
+    <div class="topbar-title"><div class="dot"></div>DoomScanner &mdash; Cryptographic Bill of Materials</div>
     <div class="topbar-meta">Generated: {scan_time} &nbsp;|&nbsp; Duration: {elapsed}s</div>
 </div>
 <div class="container">
@@ -1733,7 +1733,7 @@ def build_html_report(domain, hosts, elapsed, scan_time):
     <div class="sh">Cryptographic Inventory &mdash; All Discovered Endpoints</div>
     {host_cards if host_cards else '<p style="color:var(--dim);padding:20px 0">No responsive hosts found.</p>'}
     <div class="footer">
-        <span>PQC CBOM Scanner v2.0 &nbsp;&#183;&nbsp; CycloneDX 1.6 &nbsp;&#183;&nbsp; NIST FIPS 203/204/205</span>
+        <span>DoomScanner v2.0 &nbsp;&#183;&nbsp; CycloneDX 1.6 &nbsp;&#183;&nbsp; NIST FIPS 203/204/205</span>
         <span>Target: {domain} &nbsp;&#183;&nbsp; {scan_time}</span>
     </div>
 </div>
@@ -1880,7 +1880,7 @@ def _debug_kex(host, port=443):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="PQC CBOM Scanner — Quantum-Ready Cybersecurity Discovery",
+        description="DoomScanner — Quantum-Ready Cybersecurity Discovery",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

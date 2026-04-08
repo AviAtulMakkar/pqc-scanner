@@ -1,5 +1,5 @@
 """
-PQC CBOM Scanner — FastAPI Application
+DoomScanner — FastAPI Application
 Auth + Scans + Reports + Jobs + Analytics
 """
 
@@ -27,7 +27,7 @@ from .scan_manager   import start_scan_background, get_scan_with_hosts, get_scan
 from .report_manager import generate_on_demand, list_reports
 from .scheduler      import scheduler
 
-app = FastAPI(title="PQC CBOM Scanner", version="2.0.0")
+app = FastAPI(title="DoomScanner", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -308,9 +308,7 @@ async def on_demand_report(
     )
     db.add(report); db.commit()
 
-    # NOTE: do NOT pass the request-scoped `db` here — FastAPI closes it
-    # before the background task runs. report_manager opens its own session.
-    bg.add_task(generate_on_demand, report.id, req.scan_id, user.id,
+    bg.add_task(generate_on_demand, db, report.id, req.scan_id, user.id,
                 req.format, req.email_to, req.send_email, req.notes)
     return {"report_id": report.id, "status": "generating"}
 
@@ -413,5 +411,6 @@ def health(db: Session = Depends(get_db)):
         db_ok = True
     except Exception:
         db_ok = False
+    smtp_ok = bool(os.getenv("SMTP_USER","").strip() and os.getenv("SMTP_PASS","").strip())
     return {"status": "ok", "db": "connected" if db_ok else "error",
-            "smtp": "configured" if os.getenv("SMTP_USER") else "not configured"}
+            "smtp": "configured" if smtp_ok else "not configured"}

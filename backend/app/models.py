@@ -1,5 +1,5 @@
 """
-SQLAlchemy models — PostgreSQL schema for PQC Scanner platform.
+SQLAlchemy models — PostgreSQL schema for DoomScanner platform.
 Tables: users, scans, scan_hosts, scan_ports, scheduled_jobs, reports
 """
 

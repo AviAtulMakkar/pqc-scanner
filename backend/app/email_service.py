@@ -1,6 +1,6 @@
 """
-EmailService — reads ALL SMTP config from environment variables.
-Frontend never sees SMTP credentials — it only provides recipient addresses.
+EmailService — reads SMTP config from environment at send time.
+Also reads /app/.env directly as fallback for Docker edge cases.
 """
 
 import os
@@ -14,18 +14,41 @@ from email                import encoders
 from typing               import List, Tuple, Optional
 
 
+def _load_dotenv_fallback():
+    """Read /app/.env directly if env vars aren't set — Docker fallback."""
+    env_path = "/app/.env"
+    if not os.path.exists(env_path):
+        return
+    with open(env_path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            key, _, val = line.partition('=')
+            key = key.strip()
+            val = val.strip()
+            # Only set if not already in environment
+            if key and val and not os.environ.get(key):
+                os.environ[key] = val
+
+
 class EmailService:
 
-    def __init__(self):
-        self.host       = os.getenv("SMTP_HOST",  "smtp.gmail.com")
-        self.port       = int(os.getenv("SMTP_PORT", "587"))
-        self.user       = os.getenv("SMTP_USER",  "")
-        self.password   = os.getenv("SMTP_PASS",  "")
-        self.from_email = os.getenv("FROM_EMAIL", self.user)
-        self.from_name  = os.getenv("FROM_NAME",  "PQC Scanner")
+    def _cfg(self):
+        """Read config fresh — load dotenv fallback first."""
+        _load_dotenv_fallback()
+        return {
+            "host":       os.getenv("SMTP_HOST",  "smtp.gmail.com"),
+            "port":       int(os.getenv("SMTP_PORT", "587")),
+            "user":       os.getenv("SMTP_USER",  "").strip(),
+            "password":   os.getenv("SMTP_PASS",  "").strip(),
+            "from_email": (os.getenv("FROM_EMAIL", "") or os.getenv("SMTP_USER", "")).strip(),
+            "from_name":  os.getenv("FROM_NAME",  "DoomScanner"),
+        }
 
     def is_configured(self) -> bool:
-        return bool(self.user and self.password)
+        cfg = self._cfg()
+        return bool(cfg["user"] and cfg["password"])
 
     async def send_report(
         self,
@@ -35,22 +58,23 @@ class EmailService:
         attachment_path: Optional[str] = None,
         attachment_name: Optional[str] = None,
     ) -> Tuple[bool, str]:
-        if not self.is_configured():
+        cfg = self._cfg()
+        if not cfg["user"] or not cfg["password"]:
             return False, "SMTP not configured — set SMTP_USER and SMTP_PASS in .env"
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
-            None, self._send_sync, to, subject, body_html, attachment_path, attachment_name
+            None, self._send_sync, cfg, to, subject, body_html, attachment_path, attachment_name
         )
 
-    def _send_sync(self, to, subject, body_html, attachment_path, attachment_name):
+    def _send_sync(self, cfg, to, subject, body_html, attachment_path, attachment_name):
         try:
             msg            = MIMEMultipart("mixed")
             msg["Subject"] = subject
-            msg["From"]    = f"{self.from_name} <{self.from_email}>"
+            msg["From"]    = f"{cfg['from_name']} <{cfg['from_email']}>"
             msg["To"]      = ", ".join(to)
 
             alt = MIMEMultipart("alternative")
-            alt.attach(MIMEText("PQC Scanner Report — view in HTML client.", "plain"))
+            alt.attach(MIMEText("DoomScanner Report — view in HTML client.", "plain"))
             alt.attach(MIMEText(body_html, "html"))
             msg.attach(alt)
 
@@ -64,18 +88,22 @@ class EmailService:
                 msg.attach(part)
 
             ctx = _ssl.create_default_context()
-            if self.port == 465:
-                with smtplib.SMTP_SSL(self.host, self.port, context=ctx, timeout=30) as s:
-                    s.login(self.user, self.password)
-                    s.sendmail(self.from_email, to, msg.as_string())
+            if cfg["port"] == 465:
+                with smtplib.SMTP_SSL(cfg["host"], cfg["port"], context=ctx, timeout=30) as s:
+                    s.login(cfg["user"], cfg["password"])
+                    s.sendmail(cfg["from_email"], to, msg.as_string())
             else:
-                with smtplib.SMTP(self.host, self.port, timeout=30) as s:
-                    s.ehlo(); s.starttls(context=ctx); s.ehlo()
-                    s.login(self.user, self.password)
-                    s.sendmail(self.from_email, to, msg.as_string())
+                with smtplib.SMTP(cfg["host"], cfg["port"], timeout=30) as s:
+                    s.ehlo()
+                    s.starttls(context=ctx)
+                    s.ehlo()
+                    s.login(cfg["user"], cfg["password"])
+                    s.sendmail(cfg["from_email"], to, msg.as_string())
+
             return True, f"Sent to {', '.join(to)}"
+
         except smtplib.SMTPAuthenticationError:
-            return False, "SMTP auth failed — check SMTP_USER and SMTP_PASS in .env"
+            return False, "SMTP auth failed — check Gmail App Password in .env"
         except Exception as e:
             return False, f"{type(e).__name__}: {e}"
 
@@ -87,7 +115,7 @@ class EmailService:
         return f"""
         <html><body style="font-family:system-ui,sans-serif;max-width:580px;margin:0 auto;color:#1a1a18">
           <div style="background:#1a1a18;padding:28px 32px;border-radius:10px 10px 0 0">
-            <div style="font-family:monospace;font-size:11px;color:#6b6b64;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">PQC CBOM Scanner</div>
+            <div style="font-family:monospace;font-size:11px;color:#6b6b64;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">DoomScanner</div>
             <h2 style="color:#fff;margin:0;font-weight:400;font-size:20px">Quantum Readiness Report</h2>
             <div style="color:#6b6b64;font-size:13px;margin-top:4px">{domain}</div>
           </div>
@@ -104,6 +132,9 @@ class EmailService:
                 <td style="font-size:24px;font-weight:700;color:{color}">{risk}<span style="font-size:14px;font-weight:400">/100</span></td>
               </tr>
             </table>
-            <p style="font-size:12px;color:#9f9f96">Full {fmt.upper()} report attached · PQC CBOM Scanner v2.0 · NIST FIPS 203/204/205</p>
+            <p style="font-size:12px;color:#9f9f96">Full {fmt.upper()} report attached · DoomScanner v2.0 · NIST FIPS 203/204/205</p>
           </div>
         </html>"""
+
+
+email_svc = EmailService()

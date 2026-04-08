@@ -77,7 +77,7 @@ class ScanDetailOut(ScanSummaryOut):
 
 class OnDemandReportRequest(BaseModel):
     scan_id:      str
-    format:       str        = Field("html", pattern="^(html|json|cbom)$")
+    format:       str        = Field("html", pattern="^(html|json|cbom|pdf)$")
     email_to:     List[str]  = []
     send_email:   bool       = False
     notes:        Optional[str] = None
